@@ -126,7 +126,7 @@ cdt:ListCdtInternetTraffic
     {
       "Effect": "Allow",
       "Action": [
-        "cms:DescribeMetricList"
+        "cms:QueryMetricList"
       ],
       "Resource": "*"
     },

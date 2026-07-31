@@ -38,6 +38,21 @@ read_field() {
     sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$file" | head -n 1
 }
 
+wait_for_controller() {
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+        container_id="$(docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" ps -q ecs-controller 2>/dev/null | head -n 1)"
+        health="$(docker inspect --format '{{.State.Health.Status}}' "$container_id" 2>/dev/null || true)"
+        if [ "$health" = healthy ]; then
+            return 0
+        fi
+        if [ "$health" = unhealthy ]; then
+            return 1
+        fi
+        sleep 2
+    done
+    return 1
+}
+
 run_update() {
     target="$(read_field target_sha "$processing_file")"
     request_id="$(read_field request_id "$processing_file")"
@@ -64,28 +79,29 @@ run_update() {
         return
     fi
 
-    write_status running pulling "正在切换到目标版本" 35 "$target" "$current"
+    write_status running pulling "正在获取预构建 Docker 镜像" 50 "$target" "$current"
+    export ECS_COMMIT="$target"
+    export ECS_VERSION="$(printf '%s' "$target" | cut -c1-8)"
+    export ECS_BUILD_DATE="$(git -C "$project_dir" show -s --format=%cI "$target" 2>/dev/null || printf '%s' unknown)"
+    export ECS_IMAGE_TAG="sha-$target"
+    if ! docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" pull ecs-controller; then
+        write_status error failed "对应的预构建 Docker 镜像不存在或无法拉取，已停止更新" 0 "$target" "$current"
+        return
+    fi
+    write_status running pulling "正在切换到目标版本" 65 "$target" "$current"
     if ! git -C "$project_dir" merge --ff-only "origin/$branch" >/dev/null 2>&1; then
         write_status error failed "本地代码无法快进到目标版本" 0 "$target" "$current"
         return
     fi
-    write_status running building "正在重新构建 Docker 镜像" 55 "$target" "$target"
-    export ECS_COMMIT="$target"
-    export ECS_VERSION="$(printf '%s' "$target" | cut -c1-8)"
-    export ECS_BUILD_DATE="$(git -C "$project_dir" show -s --format=%cI "$target" 2>/dev/null || printf '%s' unknown)"
-    if ! docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" build ecs-controller; then
-        git -C "$project_dir" reset --hard "$current" >/dev/null 2>&1 || true
-        write_status error rolled_back "镜像构建失败，已恢复到更新前版本" 0 "$target" "$current"
-        return
-    fi
     write_status running restarting "正在重启 ECS Controller" 80 "$target" "$target"
-    if ! docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" up -d ecs-controller; then
+    if ! docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" up -d --no-build --force-recreate ecs-controller || ! wait_for_controller; then
         git -C "$project_dir" reset --hard "$current" >/dev/null 2>&1 || true
         export ECS_COMMIT="$current"
         export ECS_VERSION="$(printf '%s' "$current" | cut -c1-8)"
         export ECS_BUILD_DATE="$(git -C "$project_dir" show -s --format=%cI "$current" 2>/dev/null || printf '%s' unknown)"
-        docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" build ecs-controller >/dev/null 2>&1 || true
-        docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" up -d ecs-controller >/dev/null 2>&1 || true
+        export ECS_IMAGE_TAG="sha-$current"
+        docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" pull ecs-controller >/dev/null 2>&1 || true
+        docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" up -d --no-build --force-recreate ecs-controller >/dev/null 2>&1 || true
         write_status error rolled_back "服务重启失败，已尝试恢复到更新前版本" 0 "$target" "$current"
         return
     fi

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,6 +20,7 @@ import (
 const (
 	defaultUpdateRepo   = "Kori1c/ecs-controller"
 	defaultUpdateBranch = "main"
+	defaultImageRepo    = "docker.io/kori1c/ecs-controller"
 )
 
 var commitPattern = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
@@ -49,6 +51,14 @@ func (s *Server) updateRepositoryURL() string {
 	return "https://github.com/" + s.updateRepository()
 }
 
+func (s *Server) updateImageRepository() string {
+	return fallback(os.Getenv("ECS_IMAGE_REPOSITORY"), defaultImageRepo)
+}
+
+func imageTag(commit string) string {
+	return "sha-" + strings.ToLower(strings.TrimSpace(commit))
+}
+
 func (s *Server) updateConfigured() bool {
 	return strings.TrimSpace(s.UpdateDir) != ""
 }
@@ -60,20 +70,23 @@ func (s *Server) checkForUpdate(w http.ResponseWriter, r *http.Request) {
 		currentVersion = app.Version
 	}
 	result := map[string]any{
-		"success":          true,
-		"configured":       s.updateConfigured(),
-		"repository":       s.updateRepository(),
-		"repository_url":   s.updateRepositoryURL(),
-		"branch":           s.updateBranch(),
-		"current_version":  currentVersion,
-		"current_commit":   currentCommit,
-		"current_url":      "",
-		"build_date":       app.BuildDate,
-		"update_available": false,
-		"checked_at":       time.Now().UTC().Format(time.RFC3339),
+		"success":           true,
+		"configured":        s.updateConfigured(),
+		"repository":        s.updateRepository(),
+		"repository_url":    s.updateRepositoryURL(),
+		"image_repository":  s.updateImageRepository(),
+		"branch":            s.updateBranch(),
+		"current_version":   currentVersion,
+		"current_commit":    currentCommit,
+		"current_url":       "",
+		"current_image_tag": "",
+		"build_date":        app.BuildDate,
+		"update_available":  false,
+		"checked_at":        time.Now().UTC().Format(time.RFC3339),
 	}
 	if commitPattern.MatchString(currentCommit) {
 		result["current_url"] = s.updateRepositoryURL() + "/commit/" + currentCommit
+		result["current_image_tag"] = imageTag(currentCommit)
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
@@ -113,11 +126,78 @@ func (s *Server) checkForUpdate(w http.ResponseWriter, r *http.Request) {
 		"message": strings.TrimSpace(strings.Split(latest.Commit.Message, "\n")[0]),
 		"url":     latest.HTMLURL,
 	}
-	result["update_available"] = !strings.EqualFold(currentCommit, latest.SHA) && !strings.EqualFold(currentCommit, shortCommit(latest.SHA))
+	sourceUpdateAvailable := !strings.EqualFold(currentCommit, latest.SHA) && !strings.EqualFold(currentCommit, shortCommit(latest.SHA))
+	result["source_update_available"] = sourceUpdateAvailable
+	result["image_tag"] = imageTag(latest.SHA)
+	imageAvailable, imageDigest, imageErr := s.prebuiltImageAvailable(ctx, latest.SHA)
+	result["image_available"] = imageAvailable
+	if imageDigest != "" {
+		result["image_digest"] = imageDigest
+	}
+	if imageErr != nil {
+		result["image_check_error"] = imageErr.Error()
+	}
+	result["update_available"] = sourceUpdateAvailable && imageAvailable
+	if sourceUpdateAvailable && !imageAvailable {
+		if imageErr != nil {
+			result["message"] = "检测到源码更新，但无法确认对应的预构建 Docker 镜像，请稍后重试"
+		} else {
+			result["message"] = "检测到源码更新，但对应的预构建 Docker 镜像尚未发布，请稍后重试"
+		}
+	}
 	if !s.updateConfigured() {
 		result["message"] = "当前部署未启用 Docker 在线更新，请使用 install.sh 更新"
 	}
 	s.json(w, http.StatusOK, result)
+}
+
+func (s *Server) prebuiltImageAvailable(ctx context.Context, commit string) (bool, string, error) {
+	if s.imageChecker != nil {
+		return s.imageChecker(ctx, commit)
+	}
+	repository := strings.TrimSpace(s.updateImageRepository())
+	repository = strings.TrimPrefix(repository, "https://")
+	repository = strings.TrimPrefix(repository, "http://")
+	registry, path := "docker.io", repository
+	if strings.HasPrefix(path, "docker.io/") {
+		path = strings.TrimPrefix(path, "docker.io/")
+	} else if slash := strings.IndexByte(path, '/'); slash > 0 && strings.Contains(path[:slash], ".") {
+		registry, path = path[:slash], path[slash+1:]
+	}
+	tag := imageTag(commit)
+	var endpoint string
+	if registry == "docker.io" {
+		endpoint = "https://hub.docker.com/v2/repositories/" + path + "/tags/" + url.PathEscape(tag)
+	} else {
+		endpoint = "https://" + registry + "/v2/" + path + "/manifests/" + url.PathEscape(tag)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return false, "", err
+	}
+	request.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	request.Header.Set("User-Agent", "ecs-controller-image-check")
+	response, err := (&http.Client{Timeout: 5 * time.Second}).Do(request)
+	if err != nil {
+		return false, "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusNotFound {
+		return false, "", nil
+	}
+	if response.StatusCode != http.StatusOK {
+		return false, "", fmt.Errorf("镜像仓库返回 HTTP %d", response.StatusCode)
+	}
+	if digest := response.Header.Get("Docker-Content-Digest"); digest != "" {
+		return true, digest, nil
+	}
+	var tagInfo struct {
+		Digest string `json:"digest"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&tagInfo); err != nil && registry != "docker.io" {
+		return false, "", err
+	}
+	return true, tagInfo.Digest, nil
 }
 
 func (s *Server) updateStatus(w http.ResponseWriter) {
@@ -155,6 +235,22 @@ func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request, data map[st
 	targetSHA := strings.ToLower(strings.TrimSpace(stringValue(data["target_commit"])))
 	if !commitPattern.MatchString(targetSHA) {
 		s.error(w, http.StatusBadRequest, "更新版本标识无效，请重新检查更新")
+		return
+	}
+	currentCommit := strings.TrimSpace(app.Commit)
+	if commitPattern.MatchString(currentCommit) && strings.EqualFold(currentCommit, targetSHA) {
+		s.error(w, http.StatusConflict, "当前已经是目标版本")
+		return
+	}
+	checkContext, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+	imageAvailable, _, imageErr := s.prebuiltImageAvailable(checkContext, targetSHA)
+	if imageErr != nil {
+		s.error(w, http.StatusServiceUnavailable, "无法确认目标版本的预构建 Docker 镜像，请稍后重试")
+		return
+	}
+	if !imageAvailable {
+		s.error(w, http.StatusConflict, "目标版本的预构建 Docker 镜像尚未发布，请稍后重试")
 		return
 	}
 	state := s.readUpdateState()

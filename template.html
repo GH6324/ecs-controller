@@ -2386,8 +2386,6 @@
             gap: 18px;
         }
 
-        .update-center-card__head,
-        .update-center-card__meta,
         .update-center-card__actions {
             display: flex;
             align-items: center;
@@ -2395,44 +2393,21 @@
             gap: 12px;
         }
 
-        .update-center-card__head {
-            align-items: flex-start;
-        }
-
-        .update-center-card__badge {
-            flex: 0 0 auto;
-            border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-            border-radius: 999px;
-            padding: 4px 9px;
-            background: color-mix(in srgb, var(--accent-light) 58%, var(--panel));
-            color: var(--accent);
-            font-size: .68rem;
-            font-weight: 800;
-        }
-
-        .update-center-card__badge.is-ready {
-            border-color: color-mix(in srgb, #22c55e 38%, var(--line));
-            background: color-mix(in srgb, #22c55e 13%, var(--panel));
-            color: #4ade80;
-        }
-
-        .update-center-card__badge.is-busy {
-            color: #fbbf24;
-        }
-
-        .update-center-card__meta {
-            justify-content: flex-start;
-            flex-wrap: wrap;
+        .update-version-list {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px 18px;
             color: var(--muted);
-            font-size: .74rem;
+            font-size: .78rem;
         }
 
-        .update-center-card__meta strong {
+        .update-version-list strong {
             color: var(--text);
             font-weight: 800;
         }
 
         .update-center-card__link {
+            overflow-wrap: anywhere;
             color: var(--accent);
             font-weight: 800;
             text-decoration: none;
@@ -2466,7 +2441,11 @@
         }
 
         @media (max-width: 600px) {
-            .update-center-card__head,
+            .update-version-list {
+                grid-template-columns: 1fr;
+                gap: 9px;
+            }
+
             .update-center-card__actions {
                 align-items: stretch;
                 flex-direction: column;
@@ -3720,25 +3699,15 @@
                                     <div>
                                         <p class="subtle-label">版本管理</p>
                                         <h3 class="mt-1 text-lg font-bold">在线更新</h3>
-                                        <p class="update-center-card__message">版本号与 GitHub 提交同步；确认后由 Docker updater 自动拉取、构建并重启服务。</p>
                                     </div>
-                                    <span class="update-center-card__badge" :class="{
-                                        'is-ready': updateInfo.configured && updateInfo.update_available,
-                                        'is-busy': updateState.status === 'queued' || updateState.status === 'running'
-                                    }">{{ updateStatusLabel }}</span>
                                 </div>
 
-                                <div class="update-center-card__meta">
+                                <div class="update-version-list">
                                     <span>当前版本 <strong>{{ updateInfo.current_version || 'dev' }}</strong></span>
-                                    <span v-if="updateInfo.latest">最新版本 <strong>{{ updateInfo.latest.version }}</strong></span>
-                                    <span v-if="updateInfo.build_date">构建于 {{ updateInfo.build_date }}</span>
-                                    <a v-if="updateInfo.repository_url" :href="updateInfo.repository_url" target="_blank" rel="noopener noreferrer" class="update-center-card__link">GitHub 项目</a>
+                                    <span>最新版本 <strong>{{ updateInfo.latest?.version || '未检查' }}</strong></span>
+                                    <a v-if="updateInfo.repository_url" :href="updateInfo.repository_url" target="_blank" rel="noopener noreferrer" class="update-center-card__link">{{ updateInfo.repository_url }}</a>
                                 </div>
 
-                                <div v-if="updateInfo.latest?.message" class="update-center-card__message">
-                                    最新提交：{{ updateInfo.latest.message }}
-                                    <a v-if="updateInfo.latest.url" :href="updateInfo.latest.url" target="_blank" rel="noopener noreferrer" class="update-center-card__link">查看提交</a>
-                                </div>
                                 <div v-if="updateState.status === 'queued' || updateState.status === 'running'" class="space-y-2">
                                     <div class="update-progress"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
                                     <div class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</div>
@@ -3750,9 +3719,6 @@
                                 <div class="update-center-card__actions">
                                     <button @click="checkForUpdates" class="ghost-button" :disabled="checkingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
                                         {{ checkingUpdate ? '检查中...' : '检查更新' }}
-                                    </button>
-                                    <button v-if="updateInfo.configured && updateInfo.update_available" @click="startOnlineUpdate" class="solid-button" :disabled="startingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
-                                        {{ startingUpdate ? '提交中...' : '立即更新' }}
                                     </button>
                                 </div>
                                 <p v-if="updateInfo.message" class="update-center-card__message">{{ updateInfo.message }}</p>
@@ -4869,6 +4835,8 @@
                     current_version: 'dev',
                     current_commit: 'dev',
                     repository_url: '',
+                    image_available: false,
+                    source_update_available: false,
                     update_available: false,
                     latest: null,
                     message: ''
@@ -5394,10 +5362,26 @@
                     try {
                         const res = await fetch('index.php?action=check_update');
                         const data = await res.json();
-                        updateInfo.value = { ...updateInfo.value, ...data };
+                        updateInfo.value = { ...updateInfo.value, ...data, message: data.message || '' };
                         await fetchUpdateStatus();
                         if (!data.success) {
                             openAlert(data.message || '检查更新失败', 'error');
+                        } else if (data.configured === false) {
+                            openAlert(data.message || '当前部署未启用 Docker 在线更新', 'info');
+                        } else if (data.source_update_available && !data.image_available) {
+                            openAlert(data.message || '对应的预构建 Docker 镜像尚未发布，请稍后重试', 'info');
+                        } else if (!data.update_available) {
+                            openAlert('当前已是最新版本', 'success');
+                        } else {
+                            const currentVersion = data.current_version || '未知';
+                            const latestVersion = data.latest?.version || '未知';
+                            const confirmed = await askConfirm(`当前版本：${currentVersion}；最新版本：${latestVersion}。更新将拉取预构建 Docker 镜像，不会在本机编译镜像。`, {
+                                title: '发现新版本，是否更新？',
+                                confirmLabel: '更新'
+                            });
+                            if (confirmed) {
+                                await startOnlineUpdate(data.latest.commit);
+                            }
                         }
                     } catch (error) {
                         console.error('Check update failed', error);
@@ -5407,17 +5391,11 @@
                     }
                 };
 
-                const startOnlineUpdate = async () => {
-                    const targetCommit = updateInfo.value.latest?.commit;
+                const startOnlineUpdate = async (targetCommit = updateInfo.value.latest?.commit) => {
                     if (!targetCommit) {
                         openAlert('请先检查更新', 'error');
                         return;
                     }
-                    const confirmed = await askConfirm('更新会拉取最新代码、重新构建镜像并重启服务，账号数据和配置会保留。确定继续吗？', {
-                        title: '确认在线更新',
-                        confirmLabel: '开始更新'
-                    });
-                    if (!confirmed) return;
 
                     startingUpdate.value = true;
                     try {
@@ -6583,14 +6561,6 @@
                     uploadingLogo,
                     checkingUpdate,
                     startingUpdate,
-                    updateStatusLabel: computed(() => {
-                        if (updateState.value.status === 'queued' || updateState.value.status === 'running') return '更新中';
-                        if (updateState.value.status === 'success') return '已完成';
-                        if (updateState.value.status === 'error') return '更新失败';
-                        if (updateInfo.value.configured && updateInfo.value.update_available) return '有新版本';
-                        if (updateInfo.value.success === false) return '检查失败';
-                        return '已是最新';
-                    }),
                     checkingLogin,
                     closeAccountModal,
                     dialogState,

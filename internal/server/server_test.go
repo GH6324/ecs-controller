@@ -492,6 +492,9 @@ func TestOnlineUpdateRequestRequiresUpdaterAndPersistsTarget(t *testing.T) {
 	}
 
 	srv.UpdateDir = t.TempDir()
+	srv.imageChecker = func(context.Context, string) (bool, string, error) {
+		return true, "sha256:test", nil
+	}
 	recorder = httptest.NewRecorder()
 	srv.startUpdate(recorder, request, map[string]any{"target_commit": strings.Repeat("b", 40)})
 	if recorder.Code != http.StatusAccepted {

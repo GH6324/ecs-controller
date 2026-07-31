@@ -10,12 +10,12 @@ usage() {
     cat <<'EOF'
 Usage: install.sh [--dir PATH] [--branch NAME] [--no-build]
 
-Clone or update ecs-controller, then deploy it with Docker Compose.
+Clone or update ecs-controller, then pull prebuilt images and deploy it with Docker Compose.
 
 Options:
   --dir PATH       Installation directory (default: $HOME/ecs-controller)
   --branch NAME    Git branch to install (default: main)
-  --no-build       Start the container without rebuilding the image
+  --no-build       Compatibility option; images are never built on the deployment host
   -h, --help       Show this help
 
 Environment:

@@ -26,7 +26,7 @@
 - 实例详情补充规格、IP、实例流量和最后同步时间，流量使用率统一按整数显示。
 - 保留旧版本 SQLite、加密密钥和密码哈希迁移兼容，已有部署可以平滑切换到 Go 版本。
 - 保留页面 Logo 自定义、一键创建 ECS、释放队列和移动端布局优化。
-- 增加 Docker 在线更新：可在前端检查 GitHub 最新提交，并查看拉取、构建、重启进度。
+- 增加 Docker 在线更新：可在前端检查 GitHub 最新提交；只有对应的预构建镜像发布后才允许更新。
 
 ---
 
@@ -43,7 +43,9 @@ Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 roo
 curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh | bash
 ```
 
-脚本会自动克隆或更新仓库、检查 Docker；如果检测到已安装但未运行的 Colima，会尝试启动 Colima，然后调用 Docker Compose 构建并启动容器。健康检查通过后会输出访问地址和首次初始化 token；访问 `http://127.0.0.1:43211`，在初始化向导中填入该 token。
+脚本会自动克隆或更新仓库、检查 Docker；如果检测到已安装但未运行的 Colima，会尝试启动 Colima，然后通过 Docker Compose 拉取 GitHub Actions 发布的预构建镜像并启动容器。部署机器不会构建 Docker 镜像。健康检查通过后会输出访问地址和首次初始化 token；访问 `http://127.0.0.1:43211`，在初始化向导中填入该 token。
+
+默认镜像为 `docker.io/kori1c/ecs-controller` 和 `docker.io/kori1c/ecs-controller-updater`，主服务按 `sha-<Git commit>` 使用版本固定的多架构镜像。也可以通过 `ECS_IMAGE_REPOSITORY`、`ECS_UPDATER_IMAGE_REPOSITORY`、`ECS_IMAGE_TAG` 和 `ECS_UPDATER_IMAGE_TAG` 自定义镜像地址或标签。
 
 管理端口默认只绑定到本机。如需公网访问，请在前面配置 HTTPS 反向代理，并设置 `ECS_COOKIE_SECURE=1`；不要直接把管理端口暴露到公网。
 
@@ -51,14 +53,15 @@ curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.
 
 ### 前端在线更新
 
-通过上面的 `install.sh` 或 `deploy.sh` 部署后，系统会额外启动一个独立的 `ecs-controller-updater` 容器。在“系统设置 → 版本更新”中点击“检查更新”，确认后它会按以下流程执行：
+通过上面的 `install.sh` 或 `deploy.sh` 部署后，系统会额外启动一个独立的 `ecs-controller-updater` 容器。在“系统设置 → 版本更新”中点击“检查更新”，系统会显示当前版本、最新版本和 GitHub 项目地址；只有源码更新且目标提交对应的预构建镜像已经发布时，才会弹窗询问是否更新。
 
 1. 从 GitHub 获取目标提交并校验版本没有变化。
 2. 检查部署目录是否存在未提交修改；存在修改时会停止，避免覆盖本地文件。
-3. 快进代码、重新构建 Go 镜像并重启主容器。
-4. 构建或重启失败时尝试恢复更新前的 Git 提交，并在页面显示结果。
+3. 再次确认目标提交的预构建 Docker 镜像存在，然后拉取镜像。
+4. 快进代码、切换镜像并重启主容器；整个过程不会在部署机器上构建镜像。
+5. 拉取或重启失败时尝试恢复更新前的 Git 提交和镜像，并在页面显示结果。
 
-更新只会保留 Docker named volume 中的 SQLite 数据、加密密钥和配置。updater 容器单独挂载 Docker socket 和部署目录，主业务容器不会直接访问 Docker socket；管理端口默认只监听本机，仍建议不要把它直接暴露到公网。旧版本已经部署的环境需要重新执行一次 `install.sh`，让 Compose 创建 updater 容器后，前端在线更新才会可用。
+镜像由 GitHub Actions 在推送到 `main` 后构建并推送；如果 Actions 尚未完成，前端会提示镜像尚未发布，不能提前更新。更新只会保留 Docker named volume 中的 SQLite 数据、加密密钥和配置。updater 容器单独挂载 Docker socket 和部署目录，主业务容器不会直接访问 Docker socket；管理端口默认只监听本机，仍建议不要把它直接暴露到公网。旧版本已经部署的环境需要重新执行一次 `install.sh`，让 Compose 创建 updater 容器并切换到预构建镜像后，前端在线更新才会可用。
 
 ---
 

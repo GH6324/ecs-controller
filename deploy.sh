@@ -13,13 +13,19 @@ if git -C "$SCRIPT_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
     export ECS_COMMIT="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
     export ECS_VERSION="$(git -C "$SCRIPT_DIR" rev-parse --short=8 HEAD)"
     export ECS_BUILD_DATE="$(git -C "$SCRIPT_DIR" show -s --format=%cI HEAD)"
+    export ECS_IMAGE_TAG="${ECS_IMAGE_TAG:-sha-$ECS_COMMIT}"
+else
+    export ECS_IMAGE_TAG="${ECS_IMAGE_TAG:-latest}"
 fi
+export ECS_IMAGE_REPOSITORY="${ECS_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller}"
+export ECS_UPDATER_IMAGE_REPOSITORY="${ECS_UPDATER_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller-updater}"
+export ECS_UPDATER_IMAGE_TAG="${ECS_UPDATER_IMAGE_TAG:-latest}"
 
 usage() {
     cat <<'EOF'
 Usage: ./deploy.sh [--no-build]
 
-Build and start ecs-controller with Docker Compose, then wait for /healthz.
+Pull prebuilt images and start ecs-controller with Docker Compose, then wait for /healthz.
 
 Environment:
   ECS_SETUP_TOKEN  One-time token used during first-run initialization.
@@ -29,7 +35,7 @@ EOF
 no_build=0
 case "${1:-}" in
     "") ;;
-    --no-build) no_build=1 ;;
+    --no-build) no_build=1 ;; # Kept for compatibility; deployment never builds locally.
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
 esac
@@ -65,15 +71,10 @@ if [[ -z "${ECS_SETUP_TOKEN:-}" ]]; then
     generated_token=1
 fi
 
-compose_args=(up -d)
-if [[ "$no_build" -eq 0 ]]; then
-    compose_args+=(--build)
-else
-    compose_args+=(--no-build)
-fi
-
+echo "Pulling prebuilt ecs-controller images..."
+"${compose_cmd[@]}" pull
 echo "Starting ecs-controller..."
-"${compose_cmd[@]}" "${compose_args[@]}"
+"${compose_cmd[@]}" up -d --no-build --remove-orphans
 
 container_name="$("${compose_cmd[@]}" ps -q ecs-controller)"
 if [[ -z "$container_name" ]]; then

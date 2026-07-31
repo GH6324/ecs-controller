@@ -1,12 +1,6 @@
 services:
   ecs-controller:
-    build:
-      context: .
-      args:
-        ECS_VERSION: ${ECS_VERSION:-dev}
-        ECS_COMMIT: ${ECS_COMMIT:-dev}
-        ECS_BUILD_DATE: ${ECS_BUILD_DATE:-unknown}
-    image: kori1c/ecs-controller:go
+    image: ${ECS_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller}:${ECS_IMAGE_TAG:-latest}
     container_name: ecs-controller
     restart: unless-stopped
     ports:
@@ -22,16 +16,14 @@ services:
       ECS_SETUP_TOKEN: ${ECS_SETUP_TOKEN:-}
       ECS_COOKIE_SECURE: ${ECS_COOKIE_SECURE:-0}
       ECS_UPDATE_DIR: /var/lib/ecs-controller/update
+      ECS_IMAGE_REPOSITORY: ${ECS_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller}
     security_opt:
       - no-new-privileges:true
 
-  # The application stays unprivileged. Only this narrowly-scoped helper can
-  # access Docker to rebuild the application after an authenticated request.
+  # The application stays unprivileged. Only this helper can access Docker to
+  # pull a prebuilt image after an authenticated request.
   ecs-controller-updater:
-    build:
-      context: .
-      dockerfile: docker/updater.Dockerfile
-    image: kori1c/ecs-controller-updater:local
+    image: ${ECS_UPDATER_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller-updater}:${ECS_UPDATER_IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       ECS_UPDATE_DIR: /update-state
@@ -39,6 +31,8 @@ services:
       ECS_COMPOSE_PROJECT_NAME: ${ECS_COMPOSE_PROJECT_NAME:-ecs-controller}
       ECS_UPDATE_BRANCH: ${ECS_UPDATE_BRANCH:-main}
       ECS_COOKIE_SECURE: ${ECS_COOKIE_SECURE:-0}
+      ECS_IMAGE_REPOSITORY: ${ECS_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller}
+      ECS_IMAGE_TAG: ${ECS_IMAGE_TAG:-latest}
     volumes:
       - .:/workspace:rw
       - update_state:/update-state

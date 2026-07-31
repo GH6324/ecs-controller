@@ -38,6 +38,7 @@ type Server struct {
 	mu           sync.Mutex
 	updateMu     sync.Mutex
 	previews     map[string]map[string]any
+	imageChecker func(context.Context, string) (bool, string, error)
 }
 
 func New(st *store.Store, dataDir, templatePath, setupToken string, client cloud.Client) *Server {

@@ -33,7 +33,7 @@
 
 当前容器使用 Go 单进程版本：HTTP API、SQLite、任务 worker、监控 worker 和 Telegram 控制 worker 在同一个可优雅关闭的服务中运行。
 
-### 方式一：Docker Compose (推荐)
+### Docker 一键部署
 Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧版本的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
 
 首次部署可以直接使用远程 Bash 安装脚本：
@@ -42,58 +42,11 @@ Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 roo
 curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh | bash
 ```
 
-脚本会自动克隆或更新仓库、检查 Docker；如果检测到已安装但未运行的 Colima，会尝试启动 Colima，然后调用 Docker Compose 完成构建和部署。
-
-如果希望先下载脚本再执行，便于检查内容：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh -o install.sh
-bash install.sh
-```
-
-也可以指定安装目录或跳过镜像构建：
-
-```bash
-bash install.sh --dir "$HOME/ecs-controller" --no-build
-```
-
-已经在项目目录中的用户，也可以直接执行本地部署脚本：
-
-```bash
-./deploy.sh
-```
-
-脚本会检查 Docker/Compose 和运行状态，自动构建并启动容器，等待健康检查通过后输出访问地址和首次初始化 token。也可以自行指定初始化 token：
-
-```bash
-ECS_SETUP_TOKEN="请替换为一次性随机 token" ./deploy.sh
-```
-
-如果只想重新启动而不重新构建镜像：
-
-```bash
-./deploy.sh --no-build
-```
-
-然后访问 `http://127.0.0.1:43211`，并在初始化向导中填入脚本输出的一次性 token。也可以从容器日志查看启动信息：
-
-```bash
-docker compose logs ecs-controller
-```
+脚本会自动克隆或更新仓库、检查 Docker；如果检测到已安装但未运行的 Colima，会尝试启动 Colima，然后调用 Docker Compose 构建并启动容器。健康检查通过后会输出访问地址和首次初始化 token；访问 `http://127.0.0.1:43211`，在初始化向导中填入该 token。
 
 管理端口默认只绑定到本机。如需公网访问，请在前面配置 HTTPS 反向代理，并设置 `ECS_COOKIE_SECURE=1`；不要直接把管理端口暴露到公网。
 
 > 迁移说明：如果从旧版本升级，首次启动时会把 `./data` 中的 SQLite 数据和加密密钥复制到 Go 服务使用的 named volume；复制完成后即可移除旧的 PHP 部署文件。Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级流量账本与 CDT fallback、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
-
-### Go 版本验证
-
-```bash
-go test ./...
-go test -race ./...
-docker build -t ecs-controller-go:local .
-```
-
-ECS 创建接口现在是异步任务：`create_ecs` 返回 `taskId`，前端轮询 `get_ecs_create_task`。创建中途失败会清理已记录的 ECS/EIP 资源；真实阿里云费用、CDT 流量和 Cloudflare 联动仍应在接入对应账号后做线上验收。
 
 ---
 

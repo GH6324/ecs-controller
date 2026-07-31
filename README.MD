@@ -36,6 +36,29 @@
 ### 方式一：Docker Compose (推荐)
 Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧版本的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
 
+首次部署可以直接使用远程 Bash 安装脚本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh | bash
+```
+
+脚本会自动克隆或更新仓库、检查 Docker；如果检测到已安装但未运行的 Colima，会尝试启动 Colima，然后调用 Docker Compose 完成构建和部署。
+
+如果希望先下载脚本再执行，便于检查内容：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh -o install.sh
+bash install.sh
+```
+
+也可以指定安装目录或跳过镜像构建：
+
+```bash
+bash install.sh --dir "$HOME/ecs-controller" --no-build
+```
+
+已经在项目目录中的用户，也可以直接执行本地部署脚本：
+
 ```bash
 ./deploy.sh
 ```

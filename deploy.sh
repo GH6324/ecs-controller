@@ -91,8 +91,8 @@ fi
 echo "ecs-controller is healthy."
 echo "Open: http://127.0.0.1:43211"
 if [[ "$generated_token" -eq 1 ]]; then
-    echo "First-run setup token: $ECS_SETUP_TOKEN"
-    echo "Save this token until initialization is complete."
+    echo "Setup token (only needed before initialization): $ECS_SETUP_TOKEN"
+    echo "Save this token if initialization is not complete yet."
 else
     echo "Using ECS_SETUP_TOKEN from the environment."
 fi

@@ -42,7 +42,11 @@ jobs:
         with:
           tag: ${{ steps.generate_tag.outputs.tag }}
           name: "Release ${{ steps.generate_tag.outputs.tag }}"
-          body: "Auto-generated release for the latest commit."
+          body: |
+            本版本由 `main` 分支最新提交自动发布。
+
+            详细变更请查看仓库 README 和本次提交记录。
+          generateReleaseNotes: true
           allowUpdates: false
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}

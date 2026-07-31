@@ -20,18 +20,21 @@
 
 ## 🆕 最近更新
 
-- 新增页面 Logo 自定义，支持本地上传或填写图片地址。
-- 优化一键创建 ECS：支持公网 IP 类型、硬盘类型、系统盘大小校验与更换公网 IP。
-- 优化释放中实例展示、前后端状态联动和移动端浮窗/表单体验。
+- 完成 Go 单进程迁移：HTTP API、SQLite、任务队列、监控、自动化任务和 Telegram 控制统一由 Go 服务运行。
+- 清理旧 PHP 源码、Composer 依赖以及 Nginx/PHP-FPM/Cron 容器配置，运行时不再依赖 PHP 环境。
+- Telegram 菜单改为“首页总览 → 流量/实例列表 → 实例详情”的分层导航，实例按钮直接显示运行状态。
+- 实例详情补充规格、IP、实例流量和最后同步时间，流量使用率统一按整数显示。
+- 保留旧版本 SQLite、加密密钥和密码哈希迁移兼容，已有部署可以平滑切换到 Go 版本。
+- 保留页面 Logo 自定义、一键创建 ECS、释放队列和移动端布局优化。
 
 ---
 
 ## 🚀 快速部署
 
-当前容器使用 Go 单进程版本：HTTP API、SQLite、任务 worker 和监控 worker 在同一个可优雅关闭的服务中运行，不需要 PHP-FPM、Nginx 或 Cron。
+当前容器使用 Go 单进程版本：HTTP API、SQLite、任务 worker、监控 worker 和 Telegram 控制 worker 在同一个可优雅关闭的服务中运行。
 
 ### 方式一：Docker Compose (推荐)
-Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
+Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧版本的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
 
 ```bash
 export ECS_SETUP_TOKEN="请替换为一次性随机 token"
@@ -46,7 +49,7 @@ docker compose logs ecs-controller
 
 管理端口默认只绑定到本机。如需公网访问，请在前面配置 HTTPS 反向代理，并设置 `ECS_COOKIE_SECURE=1`；不要直接把管理端口暴露到公网。
 
-> 迁移说明：Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级流量账本与 CDT fallback、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
+> 迁移说明：如果从旧版本升级，首次启动时会把 `./data` 中的 SQLite 数据和加密密钥复制到 Go 服务使用的 named volume；复制完成后即可移除旧的 PHP 部署文件。Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级流量账本与 CDT fallback、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
 
 ### Go 版本验证
 
@@ -251,7 +254,7 @@ cdt:ListCdtInternetTraffic
 - **Backend**: Go 单进程 HTTP 服务，内置 action API、任务 worker、监控 worker 和 Telegram 控制 worker。
 - **Storage**: SQLite 3 WAL，负责配置、账号、session、任务队列、流量账本、账单缓存和审计日志；敏感字段使用 SecretBox 加密。
 - **Cloud adapter**: 通过轻量 Alibaba RPC 客户端完成 ECS、VPC、EIP、CMS、CDT 和 BSS 调用，支持 fake/mock client 做离线测试。
-- **Frontend**: Vue 3 + 静态资源；Go 服务直接托管页面，并保留历史 `index.php?action=...` API 路径以兼容现有客户端。
+- **Frontend**: Vue 3 + 静态资源；Go 服务直接托管页面和兼容 action API。
 - **Runtime**: Docker/Colima/Linux Docker 均可运行；Compose 使用 named volume、非 root 应用用户和 `/healthz` 健康检查。
 
 ---

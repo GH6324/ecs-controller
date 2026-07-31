@@ -4,7 +4,7 @@
   <img src="./icon.png" width="120" height="120" alt="ecs-controller Logo">
 </p>
 
-> **阿里云 CDT 流量监控与自动化管理终极解决方案**
+> **阿里云 ECS 管理与流量监控控制台**
 > 
 > 专为 **MJJ** 大佬设计。旨在最大化榨干阿里云 CDT 200GB 免费流量，集成流量实时监控、自动熔断保护、抢占式实例保活、**实例规格与价格透明展示**于一体。
 
@@ -28,29 +28,35 @@
 
 ## 🚀 快速部署
 
+当前默认容器已经切换到 Go 单进程版本：HTTP API、SQLite、任务 worker 和监控 worker 在同一个可优雅关闭的服务中运行，不再需要 PHP-FPM、Nginx 或 Cron。旧 PHP 文件仍保留在仓库中，便于迁移期间对照。
+
 ### 方式一：Docker Compose (推荐)
-这是最省心的部署方案，内置了自动化的定时任务巡检，无需额外配置 Crontab。
+Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
 
-1. **新建配置文件** `docker-compose.yml`：
-```yaml
-services:
-  ecs-controller:
-    image: kori1c/ecs-controller:latest
-    container_name: ecs-controller
-    restart: always
-    ports:
-      - "43210:80"
-    volumes:
-      - ./data:/var/www/html/data
-    environment:
-      - TZ=Asia/Shanghai
-```
-
-2. **启动服务**：
 ```bash
-docker-compose up -d
+export ECS_SETUP_TOKEN="请替换为一次性随机 token"
+docker compose up -d --build
 ```
-访问 `http://localhost:43210` 即可开始使用。
+
+访问 `http://127.0.0.1:43211`，初始化时把 `ECS_SETUP_TOKEN` 填入向导。没有设置环境变量时，服务会把一次性 token 打到容器日志：
+
+```bash
+docker compose logs ecs-controller
+```
+
+管理端口默认只绑定到本机。如需公网访问，请在前面配置 HTTPS 反向代理，并设置 `ECS_COOKIE_SECURE=1`；不要直接把管理端口暴露到公网。
+
+> 迁移说明：Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级流量账本与 CDT fallback、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
+
+### Go 版本验证
+
+```bash
+go test ./...
+go test -race ./...
+docker build -t ecs-controller-go:local .
+```
+
+ECS 创建接口现在是异步任务：`create_ecs` 返回 `taskId`，前端轮询 `get_ecs_create_task`。创建中途失败会清理已记录的 ECS/EIP 资源；真实阿里云费用、CDT 流量和 Cloudflare 联动仍应在接入对应账号后做线上验收。
 
 ---
 
@@ -68,7 +74,7 @@ docker-compose up -d
 如果只使用实例同步、流量监控、自动停机、手动开关机和释放实例，至少需要：
 
 ```text
-cms:DescribeMetricList
+cms:QueryMetricList
 ecs:DescribeInstances
 ecs:DescribeInstanceStatus
 ecs:StartInstance
@@ -77,7 +83,7 @@ ecs:DeleteInstance
 cdt:ListCdtInternetTraffic
 ```
 
-其中 `cms:DescribeMetricList` 用于获取 ECS 公网出口流量，缺少后会导致流量统计不可用或自动停机不准确。
+其中 `cms:QueryMetricList` 用于授权调用 `DescribeMetricList` 获取 ECS 公网出口流量，缺少后会导致流量统计不可用或自动停机不准确。
 
 ### 全功能推荐权限
 
@@ -126,7 +132,7 @@ cdt:ListCdtInternetTraffic
     {
       "Effect": "Allow",
       "Action": [
-        "cms:DescribeMetricList"
+        "cms:QueryMetricList"
       ],
       "Resource": "*"
     },
@@ -242,10 +248,11 @@ cdt:ListCdtInternetTraffic
 
 ## 🛠️ 技术架构
 
-- **Backend**: 原生 PHP 8.1+，无框架依赖，追求极致性能。
-- **Database**: SQLite 3 (WAL 模式)，兼顾轻量与读写并发。
-- **Frontend**: Vue 3.x (SFC 理念) + 原生 Vanilla CSS。
-- **SDK**: Alibaba Cloud SDK for PHP (V1)。
+- **Backend**: Go 单进程 HTTP 服务，内置 action API、任务 worker、监控 worker 和 Telegram 控制 worker；旧 PHP 文件仅作为迁移对照。
+- **Storage**: SQLite 3 WAL，负责配置、账号、session、任务队列、流量账本、账单缓存和审计日志；敏感字段使用 SecretBox 加密。
+- **Cloud adapter**: 通过轻量 Alibaba RPC 客户端完成 ECS、VPC、EIP、CMS、CDT 和 BSS 调用，支持 fake/mock client 做离线测试。
+- **Frontend**: 保留 Vue 3 + 静态资源和原有 `index.php?action=...` 兼容协议，Go 服务直接托管页面。
+- **Runtime**: Docker/Colima/Linux Docker 均可运行；Compose 使用 named volume、非 root 应用用户和 `/healthz` 健康检查。
 
 ---
 

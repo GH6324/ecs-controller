@@ -9,12 +9,14 @@ import (
 	"github.com/Kori1c/ecs-controller/internal/notify"
 )
 
-func (w *Worker) dispatchEvent(ctx context.Context, event notify.Event) {
+func (w *Worker) dispatchEvent(ctx context.Context, event notify.Event) error {
 	settings := w.Store.Settings()
 	cfg := notify.ConfigFromSettings(settings, w.Store.OpenSecret)
 	if err := (notify.Dispatcher{Config: cfg}).Dispatch(ctx, event); err != nil {
 		w.Store.AddLog("warning", "通知发送失败: "+err.Error())
+		return err
 	}
+	return nil
 }
 
 func accountLabel(account app.Account) string {

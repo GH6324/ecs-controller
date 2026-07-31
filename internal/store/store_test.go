@@ -234,6 +234,40 @@ func TestLegacyTrafficStatsAndMonthlyReset(t *testing.T) {
 	}
 }
 
+func TestDailyTrafficDeltaUsesCumulativeSnapshots(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", InstanceID: "i-1", TrafficAPIStatus: "ok"}); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := s.LoadAccounts(false)
+	if err != nil || len(accounts) != 1 {
+		t.Fatalf("load account: %#v %v", accounts, err)
+	}
+	day := time.Date(2026, 7, 31, 12, 0, 0, 0, time.Local)
+	if err := s.AddTrafficHistory(accounts[0].ID, 10, day.Add(-13*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTrafficHistory(accounts[0].ID, 14, day); err != nil {
+		t.Fatal(err)
+	}
+	traffic, complete, err := s.DailyTrafficDelta(accounts[0].ID, day)
+	if err != nil || !complete || traffic != 4 {
+		t.Fatalf("daily traffic delta: traffic=%v complete=%v err=%v", traffic, complete, err)
+	}
+
+	if err := s.AddTrafficHistory(accounts[0].ID, 3, day.AddDate(0, 0, 1).Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, complete, err := s.DailyTrafficDelta(accounts[0].ID, day.AddDate(0, 0, 1)); err != nil || complete {
+		t.Fatalf("counter reset should be incomplete: complete=%v err=%v", complete, err)
+	}
+}
+
 func TestLegacyAdminPasswordFormatsUpgradeOnLogin(t *testing.T) {
 	s, err := Open(t.TempDir())
 	if err != nil {

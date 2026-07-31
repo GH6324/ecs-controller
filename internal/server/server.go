@@ -33,8 +33,10 @@ type Server struct {
 	Template     string
 	SetupToken   string
 	CookieSecure bool
+	UpdateDir    string
 	Log          *log.Logger
 	mu           sync.Mutex
+	updateMu     sync.Mutex
 	previews     map[string]map[string]any
 }
 
@@ -203,12 +205,18 @@ func (s *Server) authenticatedAction(w http.ResponseWriter, r *http.Request, act
 		s.status(w)
 	case "get_config":
 		s.config(w)
+	case "check_update":
+		s.checkForUpdate(w, r)
+	case "get_update_status":
+		s.updateStatus(w)
 	case "save_config":
 		if err := s.saveConfig(data); err != nil {
 			s.error(w, 400, err.Error())
 		} else {
 			s.json(w, 200, map[string]any{"success": true})
 		}
+	case "start_update":
+		s.startUpdate(w, r, data)
 	case "get_logs":
 		s.json(w, 200, map[string]any{"data": s.Store.Logs(r.URL.Query().Get("tab"), 20)})
 	case "clear_logs":
@@ -484,7 +492,7 @@ func (s *Server) saveConfig(data map[string]any) error {
 		}
 	}
 	if notify, ok := data["Notification"].(map[string]any); ok {
-		for key, value := range map[string]any{"notify_email_enabled": bool01(notify["email_enabled"]), "notify_email": notify["email"], "notify_host": notify["host"], "notify_port": number(notify["port"], 465), "notify_username": notify["username"], "notify_secure": notify["secure"]} {
+		for key, value := range map[string]any{"notify_email_enabled": bool01(notify["email_enabled"]), "notify_email": notify["email"], "notify_host": notify["host"], "notify_port": number(notify["port"], 465), "notify_username": notify["username"], "notify_secure": notify["secure"], "notify_daily_enabled": bool01(notify["daily_enabled"]), "notify_daily_time": fallback(stringValue(notify["daily_time"]), "00:00")} {
 			if err := s.Store.SetSetting(key, fmt.Sprint(value)); err != nil {
 				return err
 			}
@@ -1468,7 +1476,7 @@ func (s *Server) csrfOK(w http.ResponseWriter, r *http.Request) bool {
 }
 func (s *Server) mutating(a string) bool {
 	switch a {
-	case "save_config", "upload_logo", "clear_logs", "logout", "create_ecs", "control_instance", "delete_instance", "replace_instance_ip", "refresh_account", "sync_account_group", "restore_schedule_block", "send_test_email", "send_test_telegram", "send_test_webhook":
+	case "save_config", "upload_logo", "clear_logs", "logout", "create_ecs", "control_instance", "delete_instance", "replace_instance_ip", "refresh_account", "sync_account_group", "restore_schedule_block", "send_test_email", "send_test_telegram", "send_test_webhook", "start_update":
 		return true
 	}
 	return false
@@ -1523,7 +1531,7 @@ func masked(value string) string {
 	return "********"
 }
 func notificationSettings(m map[string]string) map[string]any {
-	return map[string]any{"email_enabled": settingBool(m["notify_email_enabled"], true), "email": m["notify_email"], "host": m["notify_host"], "port": numberString(m["notify_port"], 465), "username": m["notify_username"], "password": masked(m["notify_password"]), "secure": fallback(m["notify_secure"], "ssl"), "telegram": map[string]any{"enabled": settingBool(m["notify_tg_enabled"], false), "token": masked(m["notify_tg_token"]), "chat_id": m["notify_tg_chat_id"], "proxy_type": fallback(m["notify_tg_proxy_type"], "none"), "proxy_url": m["notify_tg_proxy_url"], "proxy_ip": m["notify_tg_proxy_ip"], "proxy_port": m["notify_tg_proxy_port"], "proxy_user": m["notify_tg_proxy_user"], "proxy_pass": masked(m["notify_tg_proxy_pass"]), "allowed_user_ids": m["notify_tg_allowed_user_ids"], "confirm_ttl": numberString(m["notify_tg_confirm_ttl"], 60)}, "webhook": map[string]any{"enabled": settingBool(m["notify_wh_enabled"], false), "url": m["notify_wh_url"], "method": fallback(m["notify_wh_method"], "GET"), "request_type": fallback(m["notify_wh_request_type"], "JSON"), "headers": m["notify_wh_headers"], "body": m["notify_wh_body"]}}
+	return map[string]any{"email_enabled": settingBool(m["notify_email_enabled"], true), "email": m["notify_email"], "host": m["notify_host"], "port": numberString(m["notify_port"], 465), "username": m["notify_username"], "password": masked(m["notify_password"]), "secure": fallback(m["notify_secure"], "ssl"), "daily_enabled": settingBool(m["notify_daily_enabled"], false), "daily_time": fallback(m["notify_daily_time"], "00:00"), "telegram": map[string]any{"enabled": settingBool(m["notify_tg_enabled"], false), "token": masked(m["notify_tg_token"]), "chat_id": m["notify_tg_chat_id"], "proxy_type": fallback(m["notify_tg_proxy_type"], "none"), "proxy_url": m["notify_tg_proxy_url"], "proxy_ip": m["notify_tg_proxy_ip"], "proxy_port": m["notify_tg_proxy_port"], "proxy_user": m["notify_tg_proxy_user"], "proxy_pass": masked(m["notify_tg_proxy_pass"]), "allowed_user_ids": m["notify_tg_allowed_user_ids"], "confirm_ttl": numberString(m["notify_tg_confirm_ttl"], 60)}, "webhook": map[string]any{"enabled": settingBool(m["notify_wh_enabled"], false), "url": m["notify_wh_url"], "method": fallback(m["notify_wh_method"], "GET"), "request_type": fallback(m["notify_wh_request_type"], "JSON"), "headers": m["notify_wh_headers"], "body": m["notify_wh_body"]}}
 }
 
 // settingBool accepts both the current 0/1 representation and values written

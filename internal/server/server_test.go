@@ -195,6 +195,8 @@ func TestNotificationSwitchesPersistAndReadBack(t *testing.T) {
 		"Notification": map[string]any{
 			"email_enabled": false,
 			"email":         "ops@example.com",
+			"daily_enabled": true,
+			"daily_time":    "01:30",
 			"telegram": map[string]any{
 				"enabled":     true,
 				"confirm_ttl": 60,
@@ -212,10 +214,13 @@ func TestNotificationSwitchesPersistAndReadBack(t *testing.T) {
 	if settings["notify_email_enabled"] != "0" || settings["notify_tg_enabled"] != "1" || settings["notify_wh_enabled"] != "1" {
 		t.Fatalf("notification switches were not normalized: email=%q telegram=%q webhook=%q", settings["notify_email_enabled"], settings["notify_tg_enabled"], settings["notify_wh_enabled"])
 	}
+	if settings["notify_daily_enabled"] != "1" || settings["notify_daily_time"] != "01:30" {
+		t.Fatalf("daily summary settings were not normalized: enabled=%q time=%q", settings["notify_daily_enabled"], settings["notify_daily_time"])
+	}
 	readBack := notificationSettings(settings)
 	telegram := readBack["telegram"].(map[string]any)
 	webhook := readBack["webhook"].(map[string]any)
-	if readBack["email_enabled"] != false || telegram["enabled"] != true || webhook["enabled"] != true {
+	if readBack["email_enabled"] != false || readBack["daily_enabled"] != true || readBack["daily_time"] != "01:30" || telegram["enabled"] != true || webhook["enabled"] != true {
 		t.Fatalf("notification switches did not read back: %#v", readBack)
 	}
 
@@ -468,6 +473,36 @@ func TestPreviewUsesDynamicArchitectureZoneDiskAndWindowsPort(t *testing.T) {
 	disk, ok := summary["systemDisk"].(map[string]any)
 	if !ok || disk["category"] != "cloud_essd" || disk["size"] != float64(40) || disk["min"] != float64(40) {
 		t.Fatalf("dynamic disk fields missing: %#v", summary["systemDisk"])
+	}
+}
+
+func TestOnlineUpdateRequestRequiresUpdaterAndPersistsTarget(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	request := httptest.NewRequest(http.MethodPost, "/index.php?action=start_update", nil)
+	recorder := httptest.NewRecorder()
+	srv.startUpdate(recorder, request, map[string]any{"target_commit": strings.Repeat("a", 40)})
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unconfigured updater status: %d", recorder.Code)
+	}
+
+	srv.UpdateDir = t.TempDir()
+	recorder = httptest.NewRecorder()
+	srv.startUpdate(recorder, request, map[string]any{"target_commit": strings.Repeat("b", 40)})
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("update request status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	raw, err := os.ReadFile(filepath.Join(srv.UpdateDir, "request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), strings.Repeat("b", 40)) {
+		t.Fatalf("target commit was not persisted: %s", raw)
 	}
 }
 

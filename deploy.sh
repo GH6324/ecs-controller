@@ -4,6 +4,17 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Pass the checked-out revision into the image so the UI can compare it with
+# GitHub. The compose project name also lets the updater address this stack
+# when the repository lives outside the default installation directory.
+compose_project="$(basename "$SCRIPT_DIR")"
+export ECS_COMPOSE_PROJECT_NAME="${ECS_COMPOSE_PROJECT_NAME:-$compose_project}"
+if git -C "$SCRIPT_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
+    export ECS_COMMIT="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
+    export ECS_VERSION="$(git -C "$SCRIPT_DIR" rev-parse --short=8 HEAD)"
+    export ECS_BUILD_DATE="$(git -C "$SCRIPT_DIR" show -s --format=%cI HEAD)"
+fi
+
 usage() {
     cat <<'EOF'
 Usage: ./deploy.sh [--no-build]
@@ -57,6 +68,8 @@ fi
 compose_args=(up -d)
 if [[ "$no_build" -eq 0 ]]; then
     compose_args+=(--build)
+else
+    compose_args+=(--no-build)
 fi
 
 echo "Starting ecs-controller..."
@@ -65,6 +78,13 @@ echo "Starting ecs-controller..."
 container_name="$("${compose_cmd[@]}" ps -q ecs-controller)"
 if [[ -z "$container_name" ]]; then
     echo "The ecs-controller container was not created." >&2
+    exit 1
+fi
+
+updater_container="$("${compose_cmd[@]}" ps -q ecs-controller-updater)"
+if [[ -z "$updater_container" ]]; then
+    echo "The ecs-controller updater container was not created." >&2
+    "${compose_cmd[@]}" logs --tail=80 ecs-controller-updater >&2 || true
     exit 1
 fi
 
@@ -85,6 +105,13 @@ done
 if [[ "$health_state" != "healthy" ]]; then
     echo "Timed out waiting for ecs-controller health check: $health_state" >&2
     "${compose_cmd[@]}" logs --tail=80 ecs-controller >&2 || true
+    exit 1
+fi
+
+updater_state="$(docker inspect --format '{{.State.Status}}' "$updater_container" 2>/dev/null || true)"
+if [[ "$updater_state" != "running" ]]; then
+    echo "The ecs-controller updater is not running: ${updater_state:-unknown}" >&2
+    "${compose_cmd[@]}" logs --tail=80 ecs-controller-updater >&2 || true
     exit 1
 fi
 

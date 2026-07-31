@@ -36,6 +36,7 @@ func main() {
 	root := env("ECS_APP_DIR", ".")
 	srv := server.New(st, dataDir, filepath.Join(root, "template.html"), os.Getenv("ECS_SETUP_TOKEN"), client)
 	srv.CookieSecure = env("ECS_COOKIE_SECURE", "0") == "1" || strings.EqualFold(env("ECS_COOKIE_SECURE", "0"), "true")
+	srv.UpdateDir = env("ECS_UPDATE_DIR", "")
 	srv.CloudFactory = func(group app.Account) cloud.Client {
 		return cloud.NewRPCService(group.AccessKeyID, group.AccessKeySecret, group.RegionID)
 	}

@@ -1234,6 +1234,33 @@ func (s *Store) AddTrafficHistory(accountID int64, traffic float64, at time.Time
 	return err
 }
 
+// DailyTrafficDelta returns the change in the cumulative CMS traffic value
+// between the last samples on the requested day and the preceding day.
+// Missing samples and counter resets are reported as incomplete instead of
+// being mistaken for zero traffic.
+func (s *Store) DailyTrafficDelta(accountID int64, day time.Time) (float64, bool, error) {
+	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+	end := start.AddDate(0, 0, 1)
+	var current, previous float64
+	if err := s.DB.QueryRow(`SELECT traffic FROM traffic_daily WHERE account_id=? AND recorded_at>=? AND recorded_at<? ORDER BY recorded_at DESC LIMIT 1`, accountID, start.Unix(), end.Unix()).Scan(&current); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	if err := s.DB.QueryRow(`SELECT traffic FROM traffic_daily WHERE account_id=? AND recorded_at<? ORDER BY recorded_at DESC LIMIT 1`, accountID, start.Unix()).Scan(&previous); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	delta := current - previous
+	if delta < 0 {
+		return 0, false, nil
+	}
+	return delta, true, nil
+}
+
 func (s *Store) AccountHistory(accountID int64) (map[string]any, error) {
 	result := map[string]any{"history_24h": []map[string]any{}, "history_30d": []map[string]any{}}
 	rows, err := s.DB.Query(`SELECT traffic,recorded_at FROM traffic_hourly WHERE account_id=? AND recorded_at>=? ORDER BY recorded_at`, accountID, time.Now().Add(-24*time.Hour).Unix())

@@ -2250,19 +2250,25 @@
 
         .settings-brand-card {
             border-radius: 14px !important;
-            padding: 0.6rem 0.75rem !important;
+            padding: 0.7rem 0.8rem !important;
+            overflow: hidden;
         }
 
         .settings-brand-card label {
-            margin-bottom: 0.5rem !important;
+            margin-bottom: 0.65rem !important;
+            letter-spacing: 0.01em;
         }
 
         .settings-brand-row {
-            gap: 10px !important;
+            display: grid !important;
+            grid-template-columns: 52px minmax(0, 1fr);
+            align-items: center;
+            gap: 14px !important;
         }
 
         .settings-brand-input-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
             gap: 8px;
         }
@@ -2273,7 +2279,9 @@
         }
 
         .settings-brand-input-row > div {
-            flex: 0 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .settings-brand-card .brand-logo-preview,
@@ -2282,6 +2290,191 @@
             height: 52px !important;
             flex-basis: 52px !important;
             border-radius: 14px !important;
+        }
+
+        .settings-brand-card .brand-logo-preview {
+            background: #e6eff1;
+            border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+            box-shadow: 0 8px 18px color-mix(in srgb, var(--canvas) 44%, transparent);
+        }
+
+        .ddns-provider-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 58px;
+            border: 1px solid var(--line) !important;
+            border-radius: 12px !important;
+            padding: 10px 12px !important;
+            background: var(--control-bg) !important;
+        }
+
+        .ddns-provider-card__badge {
+            display: grid;
+            place-items: center;
+            width: 32px;
+            height: 32px;
+            flex: 0 0 32px;
+            border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+            border-radius: 9px;
+            background: color-mix(in srgb, var(--accent-light) 78%, var(--panel));
+            color: var(--accent);
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.03em;
+        }
+
+        .ddns-provider-card__title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text);
+            font-size: 0.82rem;
+            font-weight: 800;
+        }
+
+        .ddns-provider-card__tag {
+            border-radius: 999px;
+            padding: 2px 6px;
+            background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+            color: var(--accent);
+            font-size: 0.62rem;
+            font-weight: 700;
+        }
+
+        .ddns-provider-card__hint {
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 0.7rem;
+            line-height: 1.4;
+        }
+
+        .daily-summary-card {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--accent-light) 42%, var(--control-bg));
+        }
+
+        .daily-summary-card__title {
+            color: var(--text);
+            font-size: 0.84rem;
+            font-weight: 800;
+        }
+
+        .daily-summary-card__hint {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 0.72rem;
+            line-height: 1.45;
+        }
+
+        .daily-summary-card__time {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--text);
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .update-center-card {
+            gap: 18px;
+        }
+
+        .update-center-card__head,
+        .update-center-card__meta,
+        .update-center-card__actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .update-center-card__head {
+            align-items: flex-start;
+        }
+
+        .update-center-card__badge {
+            flex: 0 0 auto;
+            border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+            border-radius: 999px;
+            padding: 4px 9px;
+            background: color-mix(in srgb, var(--accent-light) 58%, var(--panel));
+            color: var(--accent);
+            font-size: .68rem;
+            font-weight: 800;
+        }
+
+        .update-center-card__badge.is-ready {
+            border-color: color-mix(in srgb, #22c55e 38%, var(--line));
+            background: color-mix(in srgb, #22c55e 13%, var(--panel));
+            color: #4ade80;
+        }
+
+        .update-center-card__badge.is-busy {
+            color: #fbbf24;
+        }
+
+        .update-center-card__meta {
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            color: var(--muted);
+            font-size: .74rem;
+        }
+
+        .update-center-card__meta strong {
+            color: var(--text);
+            font-weight: 800;
+        }
+
+        .update-center-card__link {
+            color: var(--accent);
+            font-weight: 800;
+            text-decoration: none;
+        }
+
+        .update-center-card__link:hover {
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .update-center-card__message {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: .76rem;
+            line-height: 1.55;
+        }
+
+        .update-progress {
+            overflow: hidden;
+            height: 6px;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--line) 72%, transparent);
+        }
+
+        .update-progress > span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: var(--accent);
+            transition: width .35s ease;
+        }
+
+        @media (max-width: 600px) {
+            .update-center-card__head,
+            .update-center-card__actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .update-center-card__actions > button {
+                width: 100%;
+            }
         }
 
         .settings-panel-enter-active,
@@ -2898,6 +3091,30 @@
                 flex: 1 1 0;
             }
         }
+
+        @media (max-width: 600px) {
+            .settings-brand-row {
+                grid-template-columns: 1fr;
+            }
+
+            .settings-brand-card .brand-logo-preview,
+            .settings-brand-card .brand-logo-fallback {
+                justify-self: start;
+            }
+
+            .settings-brand-input-row {
+                grid-template-columns: 1fr;
+            }
+
+            .settings-brand-input-row > div {
+                width: 100%;
+            }
+
+            .settings-brand-input-row > div > .ghost-button,
+            .settings-brand-input-row > div > .danger-button {
+                flex: 1 1 auto;
+            }
+        }
     </style>
 </head>
 
@@ -3498,6 +3715,50 @@
                                 </div>
                             </div>
 
+                            <div v-if="currentSettingsTab === 'updates'" class="metric-card update-center-card">
+                                <div class="update-center-card__head">
+                                    <div>
+                                        <p class="subtle-label">版本管理</p>
+                                        <h3 class="mt-1 text-lg font-bold">在线更新</h3>
+                                        <p class="update-center-card__message">版本号与 GitHub 提交同步；确认后由 Docker updater 自动拉取、构建并重启服务。</p>
+                                    </div>
+                                    <span class="update-center-card__badge" :class="{
+                                        'is-ready': updateInfo.configured && updateInfo.update_available,
+                                        'is-busy': updateState.status === 'queued' || updateState.status === 'running'
+                                    }">{{ updateStatusLabel }}</span>
+                                </div>
+
+                                <div class="update-center-card__meta">
+                                    <span>当前版本 <strong>{{ updateInfo.current_version || 'dev' }}</strong></span>
+                                    <span v-if="updateInfo.latest">最新版本 <strong>{{ updateInfo.latest.version }}</strong></span>
+                                    <span v-if="updateInfo.build_date">构建于 {{ updateInfo.build_date }}</span>
+                                    <a v-if="updateInfo.repository_url" :href="updateInfo.repository_url" target="_blank" rel="noopener noreferrer" class="update-center-card__link">GitHub 项目</a>
+                                </div>
+
+                                <div v-if="updateInfo.latest?.message" class="update-center-card__message">
+                                    最新提交：{{ updateInfo.latest.message }}
+                                    <a v-if="updateInfo.latest.url" :href="updateInfo.latest.url" target="_blank" rel="noopener noreferrer" class="update-center-card__link">查看提交</a>
+                                </div>
+                                <div v-if="updateState.status === 'queued' || updateState.status === 'running'" class="space-y-2">
+                                    <div class="update-progress"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
+                                    <div class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</div>
+                                </div>
+                                <div v-else-if="updateState.status === 'error'" class="update-center-card__message text-red-300">
+                                    {{ updateState.message || '更新失败，请查看系统日志。' }}
+                                </div>
+
+                                <div class="update-center-card__actions">
+                                    <button @click="checkForUpdates" class="ghost-button" :disabled="checkingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
+                                        {{ checkingUpdate ? '检查中...' : '检查更新' }}
+                                    </button>
+                                    <button v-if="updateInfo.configured && updateInfo.update_available" @click="startOnlineUpdate" class="solid-button" :disabled="startingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
+                                        {{ startingUpdate ? '提交中...' : '立即更新' }}
+                                    </button>
+                                </div>
+                                <p v-if="updateInfo.message" class="update-center-card__message">{{ updateInfo.message }}</p>
+                                <p v-if="updateInfo.configured === false" class="update-center-card__message">当前不是带 updater 的 Docker Compose 部署；请使用 `install.sh` 更新。</p>
+                            </div>
+
                             <div v-if="currentSettingsTab === 'ddns'" class="metric-card">
                                 <div>
                                     <p class="subtle-label">DDNS</p>
@@ -3515,9 +3776,15 @@
                                         </span>
                                     </label>
                                     <input type="hidden" v-model="config.Ddns.provider">
-                                    <div class="rounded-[18px] border border-slate-200/70 bg-white/70 px-4 py-3 text-sm">
-                                        <div class="font-bold text-[#1f2937]">Cloudflare</div>
-                                        <div class="mt-1 text-xs leading-5 text-[var(--muted)]">当前仅支持 Cloudflare，后续可扩展其他 DNS 服务商。</div>
+                                    <div class="ddns-provider-card">
+                                        <div class="ddns-provider-card__badge" aria-hidden="true">CF</div>
+                                        <div>
+                                            <div class="ddns-provider-card__title">
+                                                <span>Cloudflare</span>
+                                                <span class="ddns-provider-card__tag">当前提供商</span>
+                                            </div>
+                                            <div class="ddns-provider-card__hint">当前支持 Cloudflare，后续可扩展其他 DNS 服务商。</div>
+                                        </div>
                                     </div>
                                     <div>
                                         <label class="mb-2 block text-sm font-semibold text-[#6f7787]">Cloudflare API Token</label>
@@ -3551,6 +3818,23 @@
                                     <button @click="currentNotifyTab = 'email'" class="ghost-button" :class="{ 'text-dark-button': currentNotifyTab === 'email' }">邮件</button>
                                     <button @click="currentNotifyTab = 'telegram'" class="ghost-button" :class="{ 'text-dark-button': currentNotifyTab === 'telegram' }">Telegram</button>
                                     <button @click="currentNotifyTab = 'webhook'" class="ghost-button" :class="{ 'text-dark-button': currentNotifyTab === 'webhook' }">接口回调</button>
+                                </div>
+
+                                <div class="daily-summary-card">
+                                    <label class="switch-row flex items-center justify-between rounded-[12px] border px-3 py-2 text-sm">
+                                        <span>
+                                            <span class="daily-summary-card__title">每日流量摘要</span>
+                                            <span class="daily-summary-card__hint">CMS 推送昨日实例增量，CDT 推送当前周期累计用量。</span>
+                                        </span>
+                                        <span class="switch-control shrink-0">
+                                            <input type="checkbox" v-model="config.Notification.daily_enabled">
+                                            <span class="switch-slider"></span>
+                                        </span>
+                                    </label>
+                                    <div class="daily-summary-card__time">
+                                        <span>推送时间</span>
+                                        <time-picker v-model="config.Notification.daily_time" />
+                                    </div>
                                 </div>
 
                                 <div v-if="currentNotifyTab === 'email'" class="mt-5 space-y-3">
@@ -4532,6 +4816,8 @@
                         username: '',
                         password: '',
                         secure: 'ssl',
+                        daily_enabled: false,
+                        daily_time: '00:00',
                         telegram: {
                             enabled: false,
                             token: '',
@@ -4578,6 +4864,16 @@
                 });
 
                 const config = ref(createDefaultConfig());
+                const updateInfo = ref({
+                    configured: false,
+                    current_version: 'dev',
+                    current_commit: 'dev',
+                    repository_url: '',
+                    update_available: false,
+                    latest: null,
+                    message: ''
+                });
+                const updateState = ref({ status: 'idle', progress: 0, message: '' });
                 const statusInstances = ref([]);
                 const allInstances = ref([]);
                 const systemLogs = ref([]);
@@ -4601,6 +4897,9 @@
                 const testingTelegram = ref(false);
                 const testingWebhook = ref(false);
                 const uploadingLogo = ref(false);
+                const checkingUpdate = ref(false);
+                const startingUpdate = ref(false);
+                let updateInterval = null;
                 const fetchingAllInstances = ref(false);
                 const syncingInstances = ref(false);
                 const refreshingInstanceIds = ref([]);
@@ -4913,7 +5212,8 @@
                 const settingsItems = [
                     { key: 'global', label: '全局设置', description: '运行参数、阈值与费用' },
                     { key: 'ddns', label: 'DDNS', description: '域名与公网 IP 同步' },
-                    { key: 'notifications', label: '通知中心', description: '邮件、Telegram、回调' }
+                    { key: 'notifications', label: '通知中心', description: '邮件、Telegram、回调' },
+                    { key: 'updates', label: '版本更新', description: '检查与在线更新' }
                 ];
 
                 const menuItems = computed(() => {
@@ -4965,7 +5265,10 @@
                         next.admin_password = '';
                     }
 
-                    next.Notification = payload?.Notification || next.Notification;
+                    next.Notification = {
+                        ...next.Notification,
+                        ...(payload?.Notification || {})
+                    };
                     next.Notification.telegram = payload?.Notification?.telegram || next.Notification.telegram;
                     next.Notification.webhook = payload?.Notification?.webhook || next.Notification.webhook;
                     next.AppBrand = {
@@ -5059,6 +5362,89 @@
                         markConfigClean();
                     } catch (error) {
                         console.error('Fetch config failed', error);
+                    }
+                };
+
+                const stopUpdatePolling = () => {
+                    if (updateInterval) {
+                        clearInterval(updateInterval);
+                        updateInterval = null;
+                    }
+                };
+
+                const fetchUpdateStatus = async () => {
+                    try {
+                        const res = await fetch('index.php?action=get_update_status');
+                        const data = await res.json();
+                        updateState.value = data || { status: 'idle', progress: 0 };
+                        if (['queued', 'running'].includes(updateState.value.status)) {
+                            if (!updateInterval) {
+                                updateInterval = setInterval(fetchUpdateStatus, 2000);
+                            }
+                        } else {
+                            stopUpdatePolling();
+                        }
+                    } catch (error) {
+                        console.error('Fetch update status failed', error);
+                    }
+                };
+
+                const checkForUpdates = async () => {
+                    checkingUpdate.value = true;
+                    try {
+                        const res = await fetch('index.php?action=check_update');
+                        const data = await res.json();
+                        updateInfo.value = { ...updateInfo.value, ...data };
+                        await fetchUpdateStatus();
+                        if (!data.success) {
+                            openAlert(data.message || '检查更新失败', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Check update failed', error);
+                        openAlert('检查更新请求失败', 'error');
+                    } finally {
+                        checkingUpdate.value = false;
+                    }
+                };
+
+                const startOnlineUpdate = async () => {
+                    const targetCommit = updateInfo.value.latest?.commit;
+                    if (!targetCommit) {
+                        openAlert('请先检查更新', 'error');
+                        return;
+                    }
+                    const confirmed = await askConfirm('更新会拉取最新代码、重新构建镜像并重启服务，账号数据和配置会保留。确定继续吗？', {
+                        title: '确认在线更新',
+                        confirmLabel: '开始更新'
+                    });
+                    if (!confirmed) return;
+
+                    startingUpdate.value = true;
+                    try {
+                        const res = await fetch('index.php?action=start_update', {
+                            method: 'POST',
+                            body: JSON.stringify({ target_commit: targetCommit })
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.success) {
+                            openAlert(data.message || '在线更新提交失败', 'error');
+                            return;
+                        }
+                        updateState.value = { ...updateState.value, status: 'queued', progress: 5, message: '更新任务已提交' };
+                        stopUpdatePolling();
+                        updateInterval = setInterval(async () => {
+                            await fetchUpdateStatus();
+                            if (updateState.value.status === 'success') {
+                                stopUpdatePolling();
+                                openAlert('更新完成，页面即将重新加载', 'success');
+                                setTimeout(reloadPage, 1400);
+                            }
+                        }, 2000);
+                    } catch (error) {
+                        console.error('Start online update failed', error);
+                        openAlert('在线更新请求失败', 'error');
+                    } finally {
+                        startingUpdate.value = false;
                     }
                 };
 
@@ -6066,6 +6452,14 @@
                     }
                 });
 
+                watch(currentSettingsTab, async (tab) => {
+                    if (tab === 'updates' && isAdmin.value) {
+                        await checkForUpdates();
+                    } else {
+                        stopUpdatePolling();
+                    }
+                });
+
                 watch(isAdmin, async (value) => {
                     if (value) {
                         await fetchConfig();
@@ -6120,6 +6514,7 @@
                     stopStatusPolling();
                     stopManagePolling();
                     stopAccountPolling();
+                    stopUpdatePolling();
                     if (diskOptionTimer) {
                         clearTimeout(diskOptionTimer);
                     }
@@ -6129,6 +6524,8 @@
                     aliyunRegions,
                     allInstances,
                     config,
+                    updateInfo,
+                    updateState,
                     brandLogoUrl,
                     cronWarning,
                     criticalError,
@@ -6184,6 +6581,16 @@
                     testingTelegram,
                     testingWebhook,
                     uploadingLogo,
+                    checkingUpdate,
+                    startingUpdate,
+                    updateStatusLabel: computed(() => {
+                        if (updateState.value.status === 'queued' || updateState.value.status === 'running') return '更新中';
+                        if (updateState.value.status === 'success') return '已完成';
+                        if (updateState.value.status === 'error') return '更新失败';
+                        if (updateInfo.value.configured && updateInfo.value.update_available) return '有新版本';
+                        if (updateInfo.value.success === false) return '检查失败';
+                        return '已是最新';
+                    }),
                     checkingLogin,
                     closeAccountModal,
                     dialogState,
@@ -6240,7 +6647,9 @@
                     sendTestTelegram,
                     sendTestWebhook,
                     fetchLogs,
-                    clearLogs
+                    clearLogs,
+                    checkForUpdates,
+                    startOnlineUpdate
                 };
             }
         }).mount('#app');

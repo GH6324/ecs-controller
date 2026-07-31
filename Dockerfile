@@ -4,9 +4,12 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+ARG ECS_VERSION=dev
+ARG ECS_COMMIT=dev
+ARG ECS_BUILD_DATE=unknown
 # Build for the architecture selected by the container base image. This keeps
 # native ARM64 builds native on Colima while still working for amd64 builders.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ecs-controller ./cmd/ecs-controller
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/Kori1c/ecs-controller/internal/app.Version=${ECS_VERSION} -X github.com/Kori1c/ecs-controller/internal/app.Commit=${ECS_COMMIT} -X github.com/Kori1c/ecs-controller/internal/app.BuildDate=${ECS_BUILD_DATE}" -o /out/ecs-controller ./cmd/ecs-controller
 
 FROM alpine:3.22
 

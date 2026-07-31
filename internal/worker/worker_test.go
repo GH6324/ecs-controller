@@ -78,6 +78,41 @@ func (f *fakeCloud) GetBilling(context.Context, string, string, string) (float64
 	return 0, 0, "CNY", nil
 }
 
+func TestDailyTrafficEventSeparatesCMSYesterdayAndCDTCurrentUsage(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.SaveGroups([]app.AccountGroup{{GroupKey: "g", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-hongkong", Remark: "香港账号", MaxTraffic: 190}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-hongkong", GroupKey: "g", InstanceID: "i-1", InstanceName: "ECS-01", InstanceStatus: "Running", TrafficAPIStatus: "ok"}); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := s.LoadAccounts(false)
+	if err != nil || len(accounts) != 1 {
+		t.Fatalf("load account: %#v %v", accounts, err)
+	}
+	day := time.Date(2026, 7, 31, 12, 0, 0, 0, time.Local)
+	if err := s.AddTrafficHistory(accounts[0].ID, 10, day.Add(-13*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTrafficHistory(accounts[0].ID, 14.33, day); err != nil {
+		t.Fatal(err)
+	}
+
+	w := &Worker{Store: s, CloudFactory: func(app.AccountGroup) cloud.Client { return &fakeCloud{cdtTraffic: 8.2} }}
+	event, err := w.dailyTrafficEvent(context.Background(), day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(event.Text, "CMS 实例昨日消耗流量：\n- ECS-01：4.33 GB") || !strings.Contains(event.Text, "CDT 账号流量已使用：\n- 香港账号：8.20 GB/190 GB") || !strings.Contains(event.Text, "数据状态：完整") {
+		t.Fatalf("unexpected daily traffic event:\n%s", event.Text)
+	}
+}
+
 func TestCreateTaskCompensatesAfterEIPFailure(t *testing.T) {
 	s, err := store.Open(t.TempDir())
 	if err != nil {

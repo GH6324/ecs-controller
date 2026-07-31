@@ -28,7 +28,7 @@
 
 ## 🚀 快速部署
 
-当前默认容器已经切换到 Go 单进程版本：HTTP API、SQLite、任务 worker 和监控 worker 在同一个可优雅关闭的服务中运行，不再需要 PHP-FPM、Nginx 或 Cron。旧 PHP 文件仍保留在仓库中，便于迁移期间对照。
+当前容器使用 Go 单进程版本：HTTP API、SQLite、任务 worker 和监控 worker 在同一个可优雅关闭的服务中运行，不需要 PHP-FPM、Nginx 或 Cron。
 
 ### 方式一：Docker Compose (推荐)
 Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
@@ -248,10 +248,10 @@ cdt:ListCdtInternetTraffic
 
 ## 🛠️ 技术架构
 
-- **Backend**: Go 单进程 HTTP 服务，内置 action API、任务 worker、监控 worker 和 Telegram 控制 worker；旧 PHP 文件仅作为迁移对照。
+- **Backend**: Go 单进程 HTTP 服务，内置 action API、任务 worker、监控 worker 和 Telegram 控制 worker。
 - **Storage**: SQLite 3 WAL，负责配置、账号、session、任务队列、流量账本、账单缓存和审计日志；敏感字段使用 SecretBox 加密。
 - **Cloud adapter**: 通过轻量 Alibaba RPC 客户端完成 ECS、VPC、EIP、CMS、CDT 和 BSS 调用，支持 fake/mock client 做离线测试。
-- **Frontend**: 保留 Vue 3 + 静态资源和原有 `index.php?action=...` 兼容协议，Go 服务直接托管页面。
+- **Frontend**: Vue 3 + 静态资源；Go 服务直接托管页面，并保留历史 `index.php?action=...` API 路径以兼容现有客户端。
 - **Runtime**: Docker/Colima/Linux Docker 均可运行；Compose 使用 named volume、非 root 应用用户和 `/healthz` 健康检查。
 
 ---

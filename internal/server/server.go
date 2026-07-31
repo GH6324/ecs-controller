@@ -539,6 +539,12 @@ func (s *Server) saveConfig(data map[string]any) error {
 		if err := s.Store.SaveGroups(groups); err != nil {
 			return err
 		}
+		// SaveGroups fills in derived keys and persists encrypted secrets on a
+		// copy, so reload the canonical groups before applying or syncing them.
+		groups, err := s.Store.LoadGroups()
+		if err != nil {
+			return err
+		}
 		beforeAccounts, _ := s.Store.LoadAccounts(false)
 		removedAccounts, err := s.Store.RemoveAccountsOutsideGroups(groups)
 		if err != nil {

@@ -231,6 +231,49 @@ func TestNotificationSwitchesPersistAndReadBack(t *testing.T) {
 	}
 }
 
+func TestSaveConfigSyncsGroupWithGeneratedKey(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client {
+		return &fakeSyncClient{instances: []cloud.Instance{{ID: "i-generated", Status: "Running"}}}
+	}
+	if err := srv.saveConfig(map[string]any{
+		"Accounts": []any{map[string]any{
+			"AccessKeyId":     "ak",
+			"AccessKeySecret": "sk",
+			"regionId":        "cn-test",
+			"maxTraffic":      200,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	groups, err := st.LoadGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 || groups[0].GroupKey == "" {
+		t.Fatalf("generated group key was not persisted: %#v", groups)
+	}
+	for _, log := range st.Logs("", 20) {
+		if log["message"] == "账号组同步失败: 账号组不存在" {
+			t.Fatalf("sync used the pre-save empty group key: %#v", log)
+		}
+	}
+	accounts, err := st.LoadAccounts(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts) != 1 || accounts[0].GroupKey != groups[0].GroupKey {
+		t.Fatalf("synced account was not linked to the generated group: %#v", accounts)
+	}
+}
+
 func TestTestAccountResolvesMaskedSecret(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {

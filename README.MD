@@ -37,11 +37,22 @@
 Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧版本的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
 
 ```bash
-export ECS_SETUP_TOKEN="请替换为一次性随机 token"
-docker compose up -d --build
+./deploy.sh
 ```
 
-访问 `http://127.0.0.1:43211`，初始化时把 `ECS_SETUP_TOKEN` 填入向导。没有设置环境变量时，服务会把一次性 token 打到容器日志：
+脚本会检查 Docker/Compose 和运行状态，自动构建并启动容器，等待健康检查通过后输出访问地址和首次初始化 token。也可以自行指定初始化 token：
+
+```bash
+ECS_SETUP_TOKEN="请替换为一次性随机 token" ./deploy.sh
+```
+
+如果只想重新启动而不重新构建镜像：
+
+```bash
+./deploy.sh --no-build
+```
+
+然后访问 `http://127.0.0.1:43211`，并在初始化向导中填入脚本输出的一次性 token。也可以从容器日志查看启动信息：
 
 ```bash
 docker compose logs ecs-controller

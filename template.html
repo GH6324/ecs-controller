@@ -2388,46 +2388,301 @@
         }
 
         .update-center-card {
-            gap: 18px;
+            position: relative;
+            display: grid;
+            gap: 16px;
+            overflow: hidden;
+            padding: 1.35rem 1.4rem 1.25rem;
+            transition: border-color .24s ease, box-shadow .24s ease, background .24s ease;
+        }
+
+        .update-center-card.has-update {
+            border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+            background:
+                radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 32%),
+                color-mix(in srgb, var(--accent-light) 24%, var(--panel));
+            box-shadow: 0 14px 34px color-mix(in srgb, var(--accent) 12%, transparent);
+        }
+
+        .update-center-card__head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+        }
+
+        .update-center-card__intro {
+            min-width: 0;
+        }
+
+        .update-center-card__eyebrow {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .update-center-card__title-row {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .update-center-card__title-row h3 {
+            margin: 0;
+        }
+
+        .update-center-card__subtitle {
+            max-width: 620px;
+            margin: 5px 0 0;
+            color: var(--muted);
+            font-size: .74rem;
+            line-height: 1.5;
+        }
+
+        .update-center-card__state {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 8px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--control-bg);
+            color: var(--muted);
+            font-size: .64rem;
+            font-weight: 800;
+            letter-spacing: .02em;
+        }
+
+        .update-center-card__state--new {
+            border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+            background: color-mix(in srgb, var(--accent-light) 70%, var(--panel));
+            color: var(--accent-strong);
+        }
+
+        .update-center-card__state-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 13%, transparent);
+        }
+
+        .update-center-card__link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            flex: 0 0 auto;
+            min-height: 36px;
+            padding: 0 11px;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            background: color-mix(in srgb, var(--panel) 78%, var(--control-bg));
+            color: var(--accent);
+            font-size: .76rem;
+            font-weight: 800;
+            text-decoration: none;
+            transition: border-color .2s ease, background .2s ease, transform .2s ease;
+        }
+
+        .update-center-card__link:hover {
+            border-color: color-mix(in srgb, var(--accent) 44%, var(--line));
+            background: var(--accent-light);
+            transform: translateY(-1px);
+        }
+
+        .update-center-card__link svg {
+            width: 15px;
+            height: 15px;
+            flex: 0 0 auto;
+        }
+
+        .update-center-card__body {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 136px;
+            align-items: stretch;
+            gap: 16px;
+        }
+
+        .update-release {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr);
+            align-items: stretch;
+            gap: 9px;
+            min-width: 0;
+            padding: 9px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--control-bg) 86%, var(--panel));
+        }
+
+        .update-release__version {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            justify-content: center;
+            gap: 7px;
+            padding: 10px 12px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+        }
+
+        .update-release__version.latest-version {
+            border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+            background: color-mix(in srgb, var(--accent-light) 68%, var(--panel));
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent);
+            animation: update-version-pulse 2.8s ease-in-out infinite;
+        }
+
+        .update-release__label {
+            color: var(--muted);
+            font-size: .66rem;
+            font-weight: 700;
+            letter-spacing: .04em;
+        }
+
+        .update-release__value-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .update-release__value {
+            overflow: hidden;
+            color: var(--text);
+            font-size: .98rem;
+            font-weight: 850;
+            letter-spacing: -.02em;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .update-release__version.latest-version .update-release__value {
+            color: var(--accent-strong);
+        }
+
+        .update-release__badge {
+            flex: 0 0 auto;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: var(--accent-contrast);
+            font-size: .61rem;
+            font-weight: 800;
+            letter-spacing: .03em;
+            white-space: nowrap;
+        }
+
+        .update-release__connector {
+            display: grid;
+            place-items: center;
+            color: var(--muted);
+        }
+
+        .update-release__connector svg {
+            width: 17px;
+            height: 17px;
         }
 
         .update-center-card__actions {
             display: flex;
+            align-items: stretch;
+            justify-content: center;
+        }
+
+        .update-center-card__actions > button {
+            width: 100%;
+            min-height: 40px;
+        }
+
+        .update-center-card__progress {
+            display: grid;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+            border-radius: 10px;
+            background: color-mix(in srgb, var(--accent-light) 54%, var(--panel));
+        }
+
+        .update-center-card__progress-head {
+            display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-        }
-
-        .update-version-list {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px 18px;
             color: var(--muted);
-            font-size: .78rem;
+            font-size: .7rem;
+            font-weight: 700;
         }
 
-        .update-version-list strong {
-            color: var(--text);
-            font-weight: 800;
+        .update-center-card__progress-head strong {
+            color: var(--accent-strong);
         }
 
-        .update-center-card__link {
-            overflow-wrap: anywhere;
+        .update-center-card__notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 9px;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: color-mix(in srgb, var(--control-bg) 72%, transparent);
+        }
+
+        .update-center-card__notice.is-warning {
+            border-color: var(--warning-border);
+            background: var(--warning-bg);
+        }
+
+        .update-center-card__notice.is-error {
+            border-color: var(--danger-border);
+            background: var(--danger-bg);
+        }
+
+        .update-center-card__notice-icon {
+            display: grid;
+            place-items: center;
+            width: 18px;
+            height: 18px;
+            flex: 0 0 18px;
+            border: 1px solid currentColor;
+            border-radius: 50%;
             color: var(--accent);
-            font-weight: 800;
-            text-decoration: none;
+            font-size: .68rem;
+            font-weight: 900;
         }
 
-        .update-center-card__link:hover {
-            text-decoration: underline;
-            text-underline-offset: 3px;
+        .update-center-card__notice.is-warning .update-center-card__notice-icon {
+            color: var(--warning-text);
+        }
+
+        .update-center-card__notice.is-error .update-center-card__notice-icon {
+            color: var(--danger-text);
+        }
+
+        .update-center-card__notice strong {
+            display: block;
+            color: var(--text);
+            font-size: .72rem;
+            font-weight: 800;
+        }
+
+        .update-center-card__notice p {
+            margin: 3px 0 0;
+            color: var(--muted);
+            font-size: .72rem;
+            line-height: 1.45;
         }
 
         .update-center-card__message {
-            margin-top: 4px;
+            margin: 0;
             color: var(--muted);
-            font-size: .76rem;
-            line-height: 1.55;
+            font-size: .74rem;
+            line-height: 1.5;
         }
 
         .update-progress {
@@ -2445,10 +2700,45 @@
             transition: width .35s ease;
         }
 
+        @keyframes update-version-pulse {
+            0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent); }
+            50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 13%, transparent); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .update-release__version.latest-version {
+                animation: none;
+            }
+        }
+
         @media (max-width: 600px) {
-            .update-version-list {
+            .update-center-card {
+                padding: 1.1rem;
+            }
+
+            .update-center-card__head {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .update-center-card__link {
+                align-self: flex-start;
+            }
+
+            .update-center-card__body {
                 grid-template-columns: 1fr;
-                gap: 9px;
+                gap: 12px;
+            }
+
+            .update-release {
+                grid-template-columns: 1fr;
+                gap: 5px;
+            }
+
+            .update-release__connector {
+                min-height: 18px;
+                transform: rotate(90deg);
             }
 
             .update-center-card__actions {
@@ -3700,35 +3990,83 @@
                                 </div>
                             </div>
 
-                            <div v-if="currentSettingsTab === 'updates'" class="metric-card update-center-card">
+                            <div v-if="currentSettingsTab === 'updates'" class="metric-card update-center-card" :class="{ 'has-update': hasAvailableUpdate }">
                                 <div class="update-center-card__head">
-                                    <div>
-                                        <p class="subtle-label">版本管理</p>
-                                        <h3 class="mt-1 text-lg font-bold">在线更新</h3>
+                                    <div class="update-center-card__intro">
+                                        <div class="update-center-card__eyebrow">
+                                            <p class="subtle-label">版本管理</p>
+                                            <span v-if="hasAvailableUpdate" class="update-center-card__state update-center-card__state--new">
+                                                <span class="update-center-card__state-dot"></span>
+                                                发现新版本
+                                            </span>
+                                            <span v-else-if="updateInfo.latest?.version" class="update-center-card__state">
+                                                <span class="update-center-card__state-dot"></span>
+                                                已完成检查
+                                            </span>
+                                        </div>
+                                        <div class="update-center-card__title-row">
+                                            <h3 class="text-lg font-bold">在线更新</h3>
+                                        </div>
+                                        <p class="update-center-card__subtitle">仅拉取已发布的 Docker 镜像，部署机器不会执行镜像构建。</p>
+                                    </div>
+
+                                    <a v-if="updateInfo.repository_url" :href="updateInfo.repository_url" target="_blank" rel="noopener noreferrer" class="update-center-card__link" aria-label="打开 GitHub 项目">
+                                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.25c-3.34.73-4.04-1.61-4.04-1.61-.55-1.4-1.34-1.77-1.34-1.77-1.09-.75.08-.74.08-.74 1.2.09 1.84 1.23 1.84 1.23 1.07 1.83 2.8 1.3 3.48.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.29-1.23 3.29-1.23.66 1.65.25 2.87.13 3.17.76.84 1.23 1.91 1.23 3.22 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"/></svg>
+                                        <span>GitHub</span>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                                    </a>
+                                </div>
+
+                                <div class="update-center-card__body">
+                                    <div class="update-release" aria-label="版本对比">
+                                        <div class="update-release__version">
+                                            <span class="update-release__label">当前版本</span>
+                                            <div class="update-release__value-row">
+                                                <strong class="update-release__value">{{ updateInfo.current_version || 'dev' }}</strong>
+                                            </div>
+                                        </div>
+                                        <div class="update-release__connector" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+                                        </div>
+                                        <div class="update-release__version" :class="{ 'latest-version': hasAvailableUpdate }">
+                                            <span class="update-release__label">最新版本</span>
+                                            <div class="update-release__value-row">
+                                                <strong class="update-release__value">{{ updateInfo.latest?.version || '未检查' }}</strong>
+                                                <span v-if="hasAvailableUpdate" class="update-release__badge">可更新</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="update-center-card__actions">
+                                        <button @click="handleUpdateAction" :class="hasAvailableUpdate ? 'solid-button' : 'ghost-button'" :disabled="checkingUpdate || startingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
+                                            {{ checkingUpdate ? '检查中...' : startingUpdate ? '提交中...' : hasAvailableUpdate ? '立即更新' : '检查更新' }}
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div class="update-version-list">
-                                    <span>当前版本 <strong>{{ updateInfo.current_version || 'dev' }}</strong></span>
-                                    <span>最新版本 <strong>{{ updateInfo.latest?.version || '未检查' }}</strong></span>
-                                    <a v-if="updateInfo.repository_url" :href="updateInfo.repository_url" target="_blank" rel="noopener noreferrer" class="update-center-card__link">{{ updateInfo.repository_url }}</a>
-                                </div>
-
-                                <div v-if="updateState.status === 'queued' || updateState.status === 'running'" class="space-y-2">
+                                <div v-if="updateState.status === 'queued' || updateState.status === 'running'" class="update-center-card__progress" aria-live="polite">
+                                    <div class="update-center-card__progress-head">
+                                        <span>更新任务</span>
+                                        <strong>{{ Number(updateState.progress || 0) }}%</strong>
+                                    </div>
                                     <div class="update-progress"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
-                                    <div class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</div>
+                                    <p class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</p>
                                 </div>
-                                <div v-else-if="updateState.status === 'error'" class="update-center-card__message text-red-300">
-                                    {{ updateState.message || '更新失败，请查看系统日志。' }}
+                                <div v-else-if="updateState.status === 'error'" class="update-center-card__notice is-error">
+                                    <span class="update-center-card__notice-icon">!</span>
+                                    <div>
+                                        <strong>更新失败</strong>
+                                        <p>{{ updateState.message || '请查看系统日志获取详细信息。' }}</p>
+                                    </div>
                                 </div>
 
-                                <div class="update-center-card__actions">
-                                    <button @click="checkForUpdates" class="ghost-button" :disabled="checkingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
-                                        {{ checkingUpdate ? '检查中...' : '检查更新' }}
-                                    </button>
+                                <div v-if="updateInfo.configured === false || (updateInfo.message && updateInfo.configured !== false)" class="update-center-card__notice" :class="{ 'is-warning': updateInfo.configured === false }">
+                                    <span class="update-center-card__notice-icon">{{ updateInfo.configured === false ? '!' : 'i' }}</span>
+                                    <div>
+                                        <strong>{{ updateInfo.configured === false ? '当前部署不支持在线更新' : hasAvailableUpdate ? '已检测到可用镜像' : '检查结果' }}</strong>
+                                        <p>{{ updateInfo.configured === false ? '请使用 install.sh 更新；在线更新只会拉取已发布的 Docker 镜像。' : updateInfo.message }}</p>
+                                    </div>
                                 </div>
-                                <p v-if="updateInfo.message" class="update-center-card__message">{{ updateInfo.message }}</p>
-                                <p v-if="updateInfo.configured === false" class="update-center-card__message">当前不是带 updater 的 Docker Compose 部署；请使用 `install.sh` 更新。</p>
                             </div>
 
                             <div v-if="currentSettingsTab === 'ddns'" class="metric-card">
@@ -4848,6 +5186,11 @@
                     message: ''
                 });
                 const updateState = ref({ status: 'idle', progress: 0, message: '' });
+                const hasAvailableUpdate = computed(() => Boolean(
+                    updateInfo.value.update_available &&
+                    updateInfo.value.image_available &&
+                    updateInfo.value.latest?.commit
+                ));
                 const statusInstances = ref([]);
                 const allInstances = ref([]);
                 const systemLogs = ref([]);
@@ -5363,7 +5706,24 @@
                     }
                 };
 
-                const checkForUpdates = async () => {
+                const confirmAndStartUpdate = async (info = updateInfo.value) => {
+                    const targetCommit = info.latest?.commit;
+                    if (!targetCommit) {
+                        openAlert('请先检查更新', 'error');
+                        return false;
+                    }
+                    const currentVersion = info.current_version || '未知';
+                    const latestVersion = info.latest?.version || '未知';
+                    const confirmed = await askConfirm(`当前版本：${currentVersion}；最新版本：${latestVersion}。更新将拉取预构建 Docker 镜像，不会在本机编译镜像。`, {
+                        title: '确认立即更新？',
+                        confirmLabel: '立即更新'
+                    });
+                    if (!confirmed) return false;
+                    await startOnlineUpdate(targetCommit);
+                    return true;
+                };
+
+                const checkForUpdates = async ({ silent = false } = {}) => {
                     checkingUpdate.value = true;
                     try {
                         const res = await fetch('index.php?action=check_update');
@@ -5371,30 +5731,30 @@
                         updateInfo.value = { ...updateInfo.value, ...data, message: data.message || '' };
                         await fetchUpdateStatus();
                         if (!data.success) {
-                            openAlert(data.message || '检查更新失败', 'error');
+                            if (!silent) openAlert(data.message || '检查更新失败', 'error');
                         } else if (data.configured === false) {
-                            openAlert(data.message || '当前部署未启用 Docker 在线更新', 'info');
+                            if (!silent) openAlert(data.message || '当前部署未启用 Docker 在线更新', 'info');
                         } else if (data.source_update_available && !data.image_available) {
-                            openAlert(data.message || '对应的预构建 Docker 镜像尚未发布，请稍后重试', 'info');
+                            if (!silent) openAlert(data.message || '对应的预构建 Docker 镜像尚未发布，请稍后重试', 'info');
                         } else if (!data.update_available) {
-                            openAlert('当前已是最新版本', 'success');
+                            if (!silent) openAlert('当前已是最新版本', 'success');
                         } else {
-                            const currentVersion = data.current_version || '未知';
-                            const latestVersion = data.latest?.version || '未知';
-                            const confirmed = await askConfirm(`当前版本：${currentVersion}；最新版本：${latestVersion}。更新将拉取预构建 Docker 镜像，不会在本机编译镜像。`, {
-                                title: '发现新版本，是否更新？',
-                                confirmLabel: '更新'
-                            });
-                            if (confirmed) {
-                                await startOnlineUpdate(data.latest.commit);
-                            }
+                            if (!silent) await confirmAndStartUpdate(data);
                         }
                     } catch (error) {
                         console.error('Check update failed', error);
-                        openAlert('检查更新请求失败', 'error');
+                        if (!silent) openAlert('检查更新请求失败', 'error');
                     } finally {
                         checkingUpdate.value = false;
                     }
+                };
+
+                const handleUpdateAction = async () => {
+                    if (hasAvailableUpdate.value) {
+                        await confirmAndStartUpdate();
+                        return;
+                    }
+                    await checkForUpdates();
                 };
 
                 const startOnlineUpdate = async (targetCommit = updateInfo.value.latest?.commit) => {
@@ -6447,7 +6807,7 @@
 
                 watch(currentSettingsTab, async (tab) => {
                     if (tab === 'updates' && isAdmin.value) {
-                        await checkForUpdates();
+                        await checkForUpdates({ silent: true });
                     } else {
                         stopUpdatePolling();
                     }
@@ -6519,6 +6879,7 @@
                     config,
                     updateInfo,
                     updateState,
+                    hasAvailableUpdate,
                     brandLogoUrl,
                     cronWarning,
                     criticalError,
@@ -6634,6 +6995,7 @@
                     fetchLogs,
                     clearLogs,
                     checkForUpdates,
+                    handleUpdateAction,
                     startOnlineUpdate
                 };
             }

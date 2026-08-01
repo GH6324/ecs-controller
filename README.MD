@@ -49,7 +49,7 @@ curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.
 
 管理端口默认只绑定到本机。如需公网访问，请在前面配置 HTTPS 反向代理，并设置 `ECS_COOKIE_SECURE=1`；不要直接把管理端口暴露到公网。
 
-> 迁移说明：如果从旧版本升级，首次启动时会把 `./data` 中的 SQLite 数据和加密密钥复制到 Go 服务使用的 named volume；复制完成后即可移除旧的 PHP 部署文件。Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级流量账本与 CDT fallback、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
+> 迁移说明：如果从旧版本升级，首次启动时会把 `./data` 中的 SQLite 数据和加密密钥复制到 Go 服务使用的 named volume；复制完成后即可移除旧的 PHP 部署文件。Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级实例流量账本、CDT 账号汇总、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
 
 ### 前端在线更新
 

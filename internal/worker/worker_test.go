@@ -18,6 +18,11 @@ type fakeCloud struct {
 	deleted, unassociated, released, cleaned int
 	describeStatus                           string
 	cdtTraffic                               float64
+	cdtCalls                                 int
+	outboundErr                              error
+	outboundBytes                            float64
+	outboundLastMS                           int64
+	outboundPoints                           int
 	started, stopped                         int
 }
 
@@ -70,9 +75,12 @@ func (f *fakeCloud) CleanupNetwork(context.Context, string, string, string, stri
 	f.cleaned++
 	return nil
 }
-func (f *fakeCloud) GetTraffic(context.Context, string) (float64, error) { return f.cdtTraffic, nil }
+func (f *fakeCloud) GetTraffic(context.Context, string) (float64, error) {
+	f.cdtCalls++
+	return f.cdtTraffic, nil
+}
 func (f *fakeCloud) GetOutboundTrafficDelta(context.Context, string, string, string, int64, int64) (float64, int64, int, string, error) {
-	return 0, 0, 0, "", nil
+	return f.outboundBytes, f.outboundLastMS, f.outboundPoints, "InternetOutRate", f.outboundErr
 }
 func (f *fakeCloud) GetBilling(context.Context, string, string, string) (float64, float64, string, error) {
 	return 0, 0, "CNY", nil
@@ -170,6 +178,30 @@ func TestProtectionTrafficUsesTheHigherCMSOrCDTValue(t *testing.T) {
 	used, source = w.protectionTraffic(context.Background(), fake, account, 80)
 	if used != 80 || source != "CMS" {
 		t.Fatalf("higher CMS value was not selected: used=%v source=%s", used, source)
+	}
+}
+
+func TestRefreshTrafficDoesNotFallbackToCDT(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-hongkong", GroupKey: "g", InstanceID: "i-1"}); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := s.LoadAccounts(false)
+	if err != nil || len(accounts) != 1 {
+		t.Fatalf("load account: %#v %v", accounts, err)
+	}
+	fake := &fakeCloud{cdtTraffic: 120, outboundErr: errors.New("CMS unavailable")}
+	w := &Worker{Store: s}
+	traffic, status, message, refreshErr := w.refreshTraffic(context.Background(), fake, accounts[0], time.Now())
+	if refreshErr == nil || status != "error" || traffic != 0 || !strings.Contains(message, "CMS") {
+		t.Fatalf("unexpected CMS failure result: traffic=%v status=%q message=%q err=%v", traffic, status, message, refreshErr)
+	}
+	if fake.cdtCalls != 0 {
+		t.Fatalf("CMS failure unexpectedly queried CDT %d times", fake.cdtCalls)
 	}
 }
 

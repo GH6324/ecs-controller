@@ -315,12 +315,6 @@ func (w *Worker) runCachedAutomation(ctx context.Context, client cloud.Client, a
 
 func (w *Worker) refreshTraffic(ctx context.Context, client cloud.Client, account app.Account, now time.Time) (float64, string, string, error) {
 	month := now.Format("2006-01")
-	if monthlyClient, ok := client.(cloud.MonthlyTrafficClient); ok {
-		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).UnixMilli()
-		if bytes, points, monthlyErr := monthlyClient.GetInstanceMonthlyTraffic(ctx, account.RegionID, account.InstanceID, account.PublicIP, monthStart, now.UnixMilli()); monthlyErr == nil && points > 0 {
-			return bytes / (1024 * 1024 * 1024), "ok", "", nil
-		}
-	}
 	sample, err := w.Store.InstanceTrafficUsage(account.ID, account.InstanceID, month)
 	if err != nil {
 		return 0, "error", err.Error(), err
@@ -331,25 +325,16 @@ func (w *Worker) refreshTraffic(ctx context.Context, client cloud.Client, accoun
 		startMS = endMS - int64(10*time.Minute/time.Millisecond)
 	}
 	delta, lastMS, points, _, metricErr := client.GetOutboundTrafficDelta(ctx, account.RegionID, account.InstanceID, account.PublicIP, startMS, endMS)
-	if metricErr == nil {
-		if points > 0 {
-			sample, err = w.Store.AddInstanceTraffic(account.ID, account.InstanceID, month, delta, lastMS)
-			if err != nil {
-				return 0, "error", err.Error(), err
-			}
+	if metricErr != nil {
+		return 0, "error", "CMS 实例流量暂不可用: " + metricErr.Error(), metricErr
+	}
+	if points > 0 {
+		sample, err = w.Store.AddInstanceTraffic(account.ID, account.InstanceID, month, delta, lastMS)
+		if err != nil {
+			return 0, "error", err.Error(), err
 		}
-		return sample.TrafficBytes / (1024 * 1024 * 1024), "ok", "", nil
 	}
-	// CDT is an account-level fallback when CMS minute metrics are unavailable.
-	// It is still useful for protection, but the API status remains explicit in
-	// the logs so operators know the precision has degraded.
-	traffic, cdtErr := client.GetTraffic(ctx, account.RegionID)
-	if cdtErr != nil {
-		err := fmt.Errorf("CMS: %v; CDT: %w", metricErr, cdtErr)
-		return 0, "error", err.Error(), err
-	}
-	w.Store.AddLog("warning", "CMS 分钟流量不可用，使用 CDT 聚合流量: "+metricErr.Error())
-	return traffic, "fallback_cdt", "CMS 月度实例指标不可用，已使用 CDT 聚合流量", nil
+	return sample.TrafficBytes / (1024 * 1024 * 1024), "ok", "", nil
 }
 
 func (w *Worker) runSchedule(ctx context.Context, client cloud.Client, account *app.Account, now time.Time, shutdownMode string) {

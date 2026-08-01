@@ -1067,52 +1067,40 @@ func (s *Server) refreshAccount(w http.ResponseWriter, data map[string]any) {
 	now := time.Now()
 	month := now.Format("2006-01")
 	endMS := now.UnixMilli()
-	monthlyTraffic := false
-	if monthlyClient, ok := client.(cloud.MonthlyTrafficClient); ok {
-		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).UnixMilli()
-		if bytes, points, monthlyErr := monthlyClient.GetInstanceMonthlyTraffic(rctx(), a.RegionID, a.InstanceID, a.PublicIP, monthStart, endMS); monthlyErr == nil && points > 0 {
-			a.TrafficUsed = bytes / (1024 * 1024 * 1024)
-			a.TrafficAPIStatus = "ok"
-			a.TrafficAPIMessage = ""
-			a.ProtectionSuspended = false
-			a.ProtectionSuspendReason = ""
-			monthlyTraffic = true
-		}
+	sample, sampleErr := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
+	if sampleErr != nil {
+		s.error(w, 500, "流量账本读取失败")
+		return
 	}
-	if !monthlyTraffic {
-		sample, sampleErr := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
-		if sampleErr != nil {
-			s.error(w, 500, "流量账本读取失败")
-			return
-		}
-		startMS := sample.LastSampleMS
-		if startMS <= 0 || startMS >= endMS {
-			startMS = endMS - int64(10*time.Minute/time.Millisecond)
-		}
-		traffic, _, _, _, metricErr := client.GetOutboundTrafficDelta(rctx(), a.RegionID, a.InstanceID, a.PublicIP, startMS, endMS)
-		if metricErr == nil {
-			if _, err := s.Store.AddInstanceTraffic(a.ID, a.InstanceID, month, traffic, endMS); err != nil {
+	startMS := sample.LastSampleMS
+	if startMS <= 0 || startMS >= endMS {
+		startMS = endMS - int64(10*time.Minute/time.Millisecond)
+	}
+	trafficUpdated := false
+	traffic, lastMS, points, _, metricErr := client.GetOutboundTrafficDelta(rctx(), a.RegionID, a.InstanceID, a.PublicIP, startMS, endMS)
+	if metricErr == nil {
+		if points > 0 {
+			if _, err := s.Store.AddInstanceTraffic(a.ID, a.InstanceID, month, traffic, lastMS); err != nil {
 				s.error(w, 500, "流量账本保存失败")
 				return
 			}
-			updated, _ := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
-			a.TrafficUsed = updated.TrafficBytes / (1024 * 1024 * 1024)
-			a.TrafficAPIStatus = "ok"
-			a.TrafficAPIMessage = ""
-			a.ProtectionSuspended = false
-			a.ProtectionSuspendReason = ""
-		} else if fallbackTraffic, fallbackErr := client.GetTraffic(rctx(), a.RegionID); fallbackErr == nil {
-			a.TrafficUsed = fallbackTraffic
-			a.TrafficAPIStatus = "fallback_cdt"
-			a.TrafficAPIMessage = "CMS 月度实例指标不可用，已使用 CDT 聚合流量"
-		} else {
-			a.TrafficAPIStatus = "error"
-			a.TrafficAPIMessage = metricErr.Error()
-			a.ProtectionSuspended = true
-			a.ProtectionSuspendReason = "traffic_api_error"
 		}
+		updated, _ := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
+		a.TrafficUsed = updated.TrafficBytes / (1024 * 1024 * 1024)
+		a.TrafficAPIStatus = "ok"
+		a.TrafficAPIMessage = ""
+		a.ProtectionSuspended = false
+		a.ProtectionSuspendReason = ""
+		trafficUpdated = true
+	} else {
+		a.TrafficAPIStatus = "error"
+		a.TrafficAPIMessage = "CMS 实例流量暂不可用: " + metricErr.Error()
+		a.ProtectionSuspended = true
+		a.ProtectionSuspendReason = "traffic_api_error"
 	}
-	_ = s.Store.AddTrafficHistory(a.ID, a.TrafficUsed, now)
+	if trafficUpdated {
+		_ = s.Store.AddTrafficHistory(a.ID, a.TrafficUsed, now)
+	}
 	var billingErr error
 	if s.Store.GetSetting("enable_billing", "0") == "1" {
 		if billingClient, ok := client.(cloud.BillingClient); ok {

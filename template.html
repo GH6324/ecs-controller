@@ -3239,7 +3239,7 @@
 
                                 <div class="mt-8">
                                     <div class="flex items-end justify-between mb-3">
-                                        <span class="text-[12px] text-[var(--muted)]">{{ item.trafficScope === 'account' ? '账号聚合流量' : '已使用流量' }} ({{ formatPercent(item.percentageOfUse) }}%)</span>
+                                        <span class="text-[12px] text-[var(--muted)]">{{ item.trafficScope === 'account' ? '账号聚合流量' : 'CMS 实例流量' }} ({{ formatPercent(item.percentageOfUse) }}%)</span>
                                         <span class="text-[15px] font-bold text-slate-800">
                                             <template v-if="hasTrafficIssue(item)">
                                                 <span>{{ formatTrafficValue(item.flow_used) }}</span>
@@ -3336,7 +3336,7 @@
                                     <div>状态</div>
                                     <div>规格</div>
                                     <div>地址</div>
-                                    <div class="center-column">出口流量</div>
+                                    <div class="center-column">CMS 实例流量</div>
                                     <div class="center-column">操作</div>
                                 </div>
 

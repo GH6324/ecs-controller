@@ -9,6 +9,7 @@ request_file="$state_dir/request.json"
 processing_file="$state_dir/request.processing.json"
 status_file="$state_dir/status.json"
 lock_dir="$state_dir/.lock"
+update_request_id=""
 
 mkdir -p "$state_dir"
 rmdir "$lock_dir" 2>/dev/null || true
@@ -24,10 +25,11 @@ write_status() {
     progress="${4:-0}"
     target="${5:-}"
     current="${6:-}"
+    request_id="${update_request_id:-}"
     now="$(date -u +%s)"
     tmp="$status_file.tmp"
     cat >"$tmp" <<EOF
-{"status":"$(json_escape "$status")","phase":"$(json_escape "$phase")","message":"$(json_escape "$message")","progress":$progress,"target_commit":"$(json_escape "$target")","current_commit":"$(json_escape "$current")","updated_at":$now}
+{"status":"$(json_escape "$status")","phase":"$(json_escape "$phase")","message":"$(json_escape "$message")","progress":$progress,"target_commit":"$(json_escape "$target")","current_commit":"$(json_escape "$current")","request_id":"$(json_escape "$request_id")","updated_at":$now}
 EOF
     mv "$tmp" "$status_file"
 }
@@ -56,6 +58,7 @@ wait_for_controller() {
 run_update() {
     target="$(read_field target_sha "$processing_file")"
     request_id="$(read_field request_id "$processing_file")"
+    update_request_id="$request_id"
     current="$(git -C "$project_dir" rev-parse HEAD 2>/dev/null || true)"
     write_status queued queued "更新任务已提交" 5 "$target" "$current"
 

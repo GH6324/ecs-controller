@@ -2638,6 +2638,11 @@
             background: var(--warning-bg);
         }
 
+        .update-center-card__notice.is-success {
+            border-color: var(--success-border);
+            background: var(--success-bg);
+        }
+
         .update-center-card__notice.is-error {
             border-color: var(--danger-border);
             background: var(--danger-bg);
@@ -2658,6 +2663,10 @@
 
         .update-center-card__notice.is-warning .update-center-card__notice-icon {
             color: var(--warning-text);
+        }
+
+        .update-center-card__notice.is-success .update-center-card__notice-icon {
+            color: var(--success-text);
         }
 
         .update-center-card__notice.is-error .update-center-card__notice-icon {
@@ -4046,11 +4055,18 @@
 
                                 <div v-if="updateState.status === 'queued' || updateState.status === 'running'" class="update-center-card__progress" aria-live="polite">
                                     <div class="update-center-card__progress-head">
-                                        <span>更新任务</span>
+                                        <span>在线更新 · {{ updatePhaseText(updateState.phase, updateState.status) }}</span>
                                         <strong>{{ Number(updateState.progress || 0) }}%</strong>
                                     </div>
                                     <div class="update-progress"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
                                     <p class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</p>
+                                </div>
+                                <div v-else-if="updateState.status === 'success' && updateReloadPending" class="update-center-card__notice is-success" aria-live="polite">
+                                    <span class="update-center-card__notice-icon">✓</span>
+                                    <div>
+                                        <strong>更新完成，正在刷新页面</strong>
+                                        <p>{{ updateState.message || '服务已切换到最新版本，请稍候。' }}</p>
+                                    </div>
                                 </div>
                                 <div v-else-if="updateState.status === 'error'" class="update-center-card__notice is-error">
                                     <span class="update-center-card__notice-icon">!</span>
@@ -5185,7 +5201,8 @@
                     latest: null,
                     message: ''
                 });
-                const updateState = ref({ status: 'idle', progress: 0, message: '' });
+                const updateState = ref({ status: 'idle', phase: '', progress: 0, message: '', target_commit: '', request_id: '' });
+                const updateReloadPending = ref(false);
                 const hasAvailableUpdate = computed(() => Boolean(
                     updateInfo.value.update_available &&
                     updateInfo.value.image_available &&
@@ -5217,6 +5234,11 @@
                 const checkingUpdate = ref(false);
                 const startingUpdate = ref(false);
                 let updateInterval = null;
+                let updatePollTarget = '';
+                let updatePollRequestID = '';
+                let updatePollStartedAt = 0;
+                let updatePending = false;
+                let updateReloadTimer = null;
                 const fetchingAllInstances = ref(false);
                 const syncingInstances = ref(false);
                 const refreshingInstanceIds = ref([]);
@@ -5689,20 +5711,103 @@
                     }
                 };
 
+                const updatePhaseText = (phase, status) => ({
+                    queued: '正在更新',
+                    fetching: '获取 GitHub 代码',
+                    pulling: '拉取预构建 Docker 镜像',
+                    restarting: '重启 ECS Controller',
+                    completed: '更新完成',
+                    failed: '更新失败',
+                    rolled_back: '更新失败，已回滚'
+                }[phase] || ({
+                    queued: '正在更新',
+                    running: '更新中',
+                    success: '已完成',
+                    error: '更新失败'
+                }[status] || '更新中'));
+
+                const scheduleUpdateReload = () => {
+                    updateReloadPending.value = true;
+                    if (updateReloadTimer) return;
+                    updateReloadTimer = window.setTimeout(() => {
+                        const nextUrl = new URL(window.location.href);
+                        nextUrl.searchParams.set('_updated', String(Date.now()));
+                        window.location.replace(nextUrl.toString());
+                    }, 1400);
+                };
+
+                const ensureUpdatePolling = () => {
+                    if (!updateInterval) {
+                        updateInterval = window.setInterval(fetchUpdateStatus, 2000);
+                    }
+                };
+
+                const updateStatusMatchesPending = (data) => {
+                    if (!updatePending) return true;
+                    const target = String(data?.target_commit || '').toLowerCase();
+                    const requestID = String(data?.request_id || '');
+                    if (updatePollRequestID && requestID && requestID !== updatePollRequestID) {
+                        return false;
+                    }
+                    if (updatePollTarget && target && target !== updatePollTarget) {
+                        return false;
+                    }
+                    if (!requestID && !target) {
+                        return false;
+                    }
+                    const updatedAt = Number(data?.updated_at || 0) * 1000;
+                    if (updatedAt > 0 && updatePollStartedAt > 0 && updatedAt < updatePollStartedAt - 1000) {
+                        return false;
+                    }
+                    return true;
+                };
+
                 const fetchUpdateStatus = async () => {
+                    const pendingAtRequest = updatePending;
                     try {
-                        const res = await fetch('index.php?action=get_update_status');
+                        const res = await fetch('index.php?action=get_update_status', { cache: 'no-store' });
+                        if (!res.ok) throw new Error(`update status HTTP ${res.status}`);
                         const data = await res.json();
-                        updateState.value = data || { status: 'idle', progress: 0 };
+                        if (pendingAtRequest && !updateStatusMatchesPending(data)) {
+                            ensureUpdatePolling();
+                            return;
+                        }
+                        updateState.value = { status: 'idle', phase: '', progress: 0, message: '', ...data };
                         if (['queued', 'running'].includes(updateState.value.status)) {
-                            if (!updateInterval) {
-                                updateInterval = setInterval(fetchUpdateStatus, 2000);
-                            }
+                            ensureUpdatePolling();
+                        } else if (pendingAtRequest && updateState.value.status === 'success') {
+                            updatePending = false;
+                            updatePollTarget = '';
+                            updatePollRequestID = '';
+                            stopUpdatePolling();
+                            openAlert('更新完成，页面即将重新加载', 'success');
+                            scheduleUpdateReload();
+                        } else if (pendingAtRequest && updateState.value.status === 'error') {
+                            updatePending = false;
+                            updatePollTarget = '';
+                            updatePollRequestID = '';
+                            stopUpdatePolling();
+                            updateReloadPending.value = false;
+                            openAlert(updateState.value.message || '在线更新失败，请查看系统日志', 'error');
                         } else {
                             stopUpdatePolling();
                         }
                     } catch (error) {
                         console.error('Fetch update status failed', error);
+                        if (pendingAtRequest) {
+                            if (Date.now() - updatePollStartedAt > 15 * 60 * 1000) {
+                                updatePending = false;
+                                updatePollTarget = '';
+                                updatePollRequestID = '';
+                                stopUpdatePolling();
+                                updateReloadPending.value = false;
+                                updateState.value = { ...updateState.value, status: 'error', phase: 'failed', message: '更新状态长时间未响应，请检查 updater 容器和系统日志。' };
+                                openAlert(updateState.value.message, 'error');
+                            } else {
+                                updateState.value = { ...updateState.value, phase: 'restarting', message: '正在等待更新服务响应，页面会继续跟踪进度。' };
+                                ensureUpdatePolling();
+                            }
+                        }
                     }
                 };
 
@@ -5774,18 +5879,29 @@
                             openAlert(data.message || '在线更新提交失败', 'error');
                             return;
                         }
-                        updateState.value = { ...updateState.value, status: 'queued', progress: 5, message: '更新任务已提交' };
+                        updatePending = true;
+                        updatePollTarget = targetCommit.toLowerCase();
+                        updatePollRequestID = String(data.request_id || '');
+                        updatePollStartedAt = Date.now();
+                        updateReloadPending.value = false;
+                        updateState.value = {
+                            ...updateState.value,
+                            status: 'queued',
+                            phase: 'queued',
+                            progress: 5,
+                            message: '正在更新，状态会自动同步。',
+                            target_commit: targetCommit,
+                            request_id: updatePollRequestID
+                        };
                         stopUpdatePolling();
-                        updateInterval = setInterval(async () => {
-                            await fetchUpdateStatus();
-                            if (updateState.value.status === 'success') {
-                                stopUpdatePolling();
-                                openAlert('更新完成，页面即将重新加载', 'success');
-                                setTimeout(reloadPage, 1400);
-                            }
-                        }, 2000);
+                        ensureUpdatePolling();
+                        await fetchUpdateStatus();
                     } catch (error) {
                         console.error('Start online update failed', error);
+                        updatePending = false;
+                        updatePollTarget = '';
+                        updatePollRequestID = '';
+                        stopUpdatePolling();
                         openAlert('在线更新请求失败', 'error');
                     } finally {
                         startingUpdate.value = false;
@@ -6808,7 +6924,7 @@
                 watch(currentSettingsTab, async (tab) => {
                     if (tab === 'updates' && isAdmin.value) {
                         await checkForUpdates({ silent: true });
-                    } else {
+                    } else if (!updatePending) {
                         stopUpdatePolling();
                     }
                 });
@@ -6868,6 +6984,10 @@
                     stopManagePolling();
                     stopAccountPolling();
                     stopUpdatePolling();
+                    if (updateReloadTimer) {
+                        clearTimeout(updateReloadTimer);
+                        updateReloadTimer = null;
+                    }
                     if (diskOptionTimer) {
                         clearTimeout(diskOptionTimer);
                     }
@@ -6879,6 +6999,7 @@
                     config,
                     updateInfo,
                     updateState,
+                    updateReloadPending,
                     hasAvailableUpdate,
                     brandLogoUrl,
                     cronWarning,
@@ -6996,7 +7117,8 @@
                     clearLogs,
                     checkForUpdates,
                     handleUpdateAction,
-                    startOnlineUpdate
+                    startOnlineUpdate,
+                    updatePhaseText
                 };
             }
         }).mount('#app');

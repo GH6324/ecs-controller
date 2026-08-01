@@ -63,7 +63,7 @@ Passkey 凭据和登录/注册挑战会使用现有 `.secret_encryption.key` 加
 
 ### 前端在线更新
 
-通过上面的 `install.sh` 或 `deploy.sh` 部署后，系统会额外启动一个独立的 `ecs-controller-updater` 容器。在“系统设置 → 版本更新”中点击“检查更新”，系统会显示当前版本、最新版本和 GitHub 项目地址；只有源码更新且目标提交对应的预构建镜像已经发布时，才会弹窗询问是否更新。
+通过上面的 `install.sh` 或 `deploy.sh` 部署后，系统会额外启动一个独立的 `ecs-controller-updater` 容器。在“关于 → 版本中心”中点击“检查更新”，系统会显示当前版本、最新版本和 GitHub 项目地址；只有源码更新且目标提交对应的预构建镜像已经发布时，才会弹窗询问是否更新。
 
 1. 从 GitHub 获取目标提交并校验版本没有变化。
 2. 检查部署目录是否存在未提交修改；存在修改时会停止，避免覆盖本地文件。
@@ -274,6 +274,8 @@ cdt:ListCdtInternetTraffic
 ## ☕ 赏杯咖啡 (Donation)
 
 如果您觉得这个工具对您有帮助，阔佬随手赏杯咖啡：
+
+![赞赏码](./static/donation-code.jpg)
 
 - **USDT-TRC20**: `TMBmXngHcKtNo9nLxTCJcGTfNutsbb9rp3`
 - **USDT-Polygon**: `0x846ad38ed7159aee70b0ebd8ec39ad2d7b32835b`

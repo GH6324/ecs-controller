@@ -2730,6 +2730,159 @@
             transition: width .35s ease;
         }
 
+        .about-section {
+            display: grid;
+            gap: 16px;
+        }
+
+        .about-hero {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            overflow: hidden;
+            padding: 18px;
+            border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+            border-radius: 16px;
+            background:
+                radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34%),
+                color-mix(in srgb, var(--accent-light) 30%, var(--panel));
+        }
+
+        .about-hero::after {
+            position: absolute;
+            right: 18px;
+            bottom: -38px;
+            width: 120px;
+            height: 120px;
+            border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+            border-radius: 50%;
+            content: "";
+        }
+
+        .about-hero__mark {
+            display: grid;
+            place-items: center;
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
+            border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
+            border-radius: 14px;
+            background: var(--accent);
+            color: var(--accent-contrast);
+            font-size: 1.05rem;
+            font-weight: 900;
+            box-shadow: 0 9px 20px color-mix(in srgb, var(--accent) 18%, transparent);
+        }
+
+        .about-hero__title {
+            margin: 3px 0 0;
+            color: var(--text);
+            font-size: 1.2rem;
+            font-weight: 900;
+            letter-spacing: -.025em;
+        }
+
+        .about-hero__copy {
+            max-width: 620px;
+            margin: 5px 0 0;
+            color: var(--muted);
+            font-size: .78rem;
+            line-height: 1.6;
+        }
+
+        .about-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.3fr) minmax(250px, .7fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .about-donation-card {
+            display: grid;
+            gap: 14px;
+            align-content: start;
+            background:
+                linear-gradient(145deg, color-mix(in srgb, var(--panel) 90%, transparent), color-mix(in srgb, var(--accent-light) 32%, var(--panel)));
+        }
+
+        .about-donation-card__head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .about-donation-card__badge {
+            display: grid;
+            place-items: center;
+            width: 34px;
+            height: 34px;
+            border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+            border-radius: 11px;
+            background: var(--accent-light);
+            color: var(--accent-strong);
+            font-size: .86rem;
+            font-weight: 900;
+        }
+
+        .about-donation-card__copy {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: .75rem;
+            line-height: 1.6;
+        }
+
+        .about-donation-card__code {
+            display: block;
+            width: min(100%, 230px);
+            margin: 2px auto 0;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 12px 26px color-mix(in srgb, var(--canvas) 16%, transparent);
+        }
+
+        .about-donation-card__wallets {
+            display: grid;
+            gap: 7px;
+            margin: 0;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--control-bg) 76%, var(--panel));
+            color: var(--muted);
+            font-size: .68rem;
+            line-height: 1.5;
+        }
+
+        .about-donation-card__wallets code {
+            color: var(--text);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: .66rem;
+            overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 820px) {
+            .about-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .about-hero {
+                align-items: flex-start;
+                padding: 15px;
+            }
+
+            .about-hero__mark {
+                width: 42px;
+                height: 42px;
+                flex-basis: 42px;
+                border-radius: 12px;
+            }
+        }
+
         @keyframes update-version-pulse {
             0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent); }
             50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 13%, transparent); }
@@ -3109,8 +3262,8 @@
                 bottom: 14px;
                 z-index: 45;
                 display: grid;
-                grid-template-columns: repeat(5, minmax(0, 1fr));
-                gap: 8px;
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 4px;
                 padding: 10px;
                 border-radius: 24px;
                 background: color-mix(in srgb, var(--panel) 92%, transparent);
@@ -3126,7 +3279,7 @@
                 justify-content: center;
                 gap: 6px;
                 min-height: 58px;
-                padding: 8px 4px;
+                padding: 8px 2px;
                 border-radius: 18px;
                 color: var(--muted);
                 transition: background .18s ease, color .18s ease, transform .18s ease;
@@ -3139,7 +3292,7 @@
             }
 
             .mobile-bottom-nav__button span:last-child {
-                font-size: 0.68rem;
+                font-size: 0.62rem;
                 font-weight: 700;
                 letter-spacing: 0.02em;
             }
@@ -4060,92 +4213,6 @@
                                 </div>
                             </div>
 
-                            <div v-if="currentSettingsTab === 'updates'" class="metric-card update-center-card" :class="{ 'has-update': hasAvailableUpdate }">
-                                <div class="update-center-card__head">
-                                    <div class="update-center-card__intro">
-                                        <div class="update-center-card__eyebrow">
-                                            <p class="subtle-label">版本管理</p>
-                                            <span v-if="hasAvailableUpdate" class="update-center-card__state update-center-card__state--new">
-                                                <span class="update-center-card__state-dot"></span>
-                                                发现新版本
-                                            </span>
-                                            <span v-else-if="updateInfo.latest?.version" class="update-center-card__state">
-                                                <span class="update-center-card__state-dot"></span>
-                                                已完成检查
-                                            </span>
-                                        </div>
-                                        <div class="update-center-card__title-row">
-                                            <h3 class="text-lg font-bold">在线更新</h3>
-                                        </div>
-                                        <p class="update-center-card__subtitle">仅拉取已发布的 Docker 镜像，部署机器不会执行镜像构建。</p>
-                                    </div>
-
-                                    <a v-if="updateInfo.repository_url" :href="updateInfo.repository_url" target="_blank" rel="noopener noreferrer" class="update-center-card__link" aria-label="打开 GitHub 项目">
-                                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.25c-3.34.73-4.04-1.61-4.04-1.61-.55-1.4-1.34-1.77-1.34-1.77-1.09-.75.08-.74.08-.74 1.2.09 1.84 1.23 1.84 1.23 1.07 1.83 2.8 1.3 3.48.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.29-1.23 3.29-1.23.66 1.65.25 2.87.13 3.17.76.84 1.23 1.91 1.23 3.22 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"/></svg>
-                                        <span>GitHub</span>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
-                                    </a>
-                                </div>
-
-                                <div class="update-center-card__body">
-                                    <div class="update-release" aria-label="版本对比">
-                                        <div class="update-release__version">
-                                            <span class="update-release__label">当前版本</span>
-                                            <div class="update-release__value-row">
-                                                <strong class="update-release__value">{{ updateInfo.current_version || 'dev' }}</strong>
-                                            </div>
-                                        </div>
-                                        <div class="update-release__connector" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
-                                        </div>
-                                        <div class="update-release__version" :class="{ 'latest-version': hasAvailableUpdate }">
-                                            <span class="update-release__label">最新版本</span>
-                                            <div class="update-release__value-row">
-                                                <strong class="update-release__value">{{ updateInfo.latest?.version || '未检查' }}</strong>
-                                                <span v-if="hasAvailableUpdate" class="update-release__badge">可更新</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="update-center-card__actions">
-                                        <button @click="handleUpdateAction" :class="hasAvailableUpdate ? 'solid-button' : 'ghost-button'" :disabled="checkingUpdate || startingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
-                                            {{ checkingUpdate ? '检查中...' : startingUpdate ? '提交中...' : hasAvailableUpdate ? '立即更新' : '检查更新' }}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div v-if="updateState.status === 'queued' || updateState.status === 'running'" class="update-center-card__progress" aria-live="polite">
-                                    <div class="update-center-card__progress-head">
-                                        <span>在线更新 · {{ updatePhaseText(updateState.phase, updateState.status) }}</span>
-                                        <strong>{{ Number(updateState.progress || 0) }}%</strong>
-                                    </div>
-                                    <div class="update-progress"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
-                                    <p class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</p>
-                                </div>
-                                <div v-else-if="updateState.status === 'success' && updateReloadPending" class="update-center-card__notice is-success" aria-live="polite">
-                                    <span class="update-center-card__notice-icon">✓</span>
-                                    <div>
-                                        <strong>更新完成，正在刷新页面</strong>
-                                        <p>{{ updateState.message || '服务已切换到最新版本，请稍候。' }}</p>
-                                    </div>
-                                </div>
-                                <div v-else-if="updateState.status === 'error'" class="update-center-card__notice is-error">
-                                    <span class="update-center-card__notice-icon">!</span>
-                                    <div>
-                                        <strong>更新失败</strong>
-                                        <p>{{ updateState.message || '请查看系统日志获取详细信息。' }}</p>
-                                    </div>
-                                </div>
-
-                                <div v-if="updateInfo.configured === false || (updateInfo.message && updateInfo.configured !== false)" class="update-center-card__notice" :class="{ 'is-warning': updateInfo.configured === false }">
-                                    <span class="update-center-card__notice-icon">{{ updateInfo.configured === false ? '!' : 'i' }}</span>
-                                    <div>
-                                        <strong>{{ updateInfo.configured === false ? '当前部署不支持在线更新' : hasAvailableUpdate ? '已检测到可用镜像' : '检查结果' }}</strong>
-                                        <p>{{ updateInfo.configured === false ? '请使用 install.sh 更新；在线更新只会拉取已发布的 Docker 镜像。' : updateInfo.message }}</p>
-                                    </div>
-                                </div>
-                            </div>
-
                             <div v-if="currentSettingsTab === 'ddns'" class="metric-card">
                                 <div>
                                     <p class="subtle-label">DDNS</p>
@@ -4352,6 +4419,121 @@
                             <div v-if="systemLogs.length === 0" class="metric-card">
                                 <p class="text-center text-sm text-[var(--muted)]">当前没有日志记录。</p>
                             </div>
+                        </div>
+                    </section>
+
+                    <section v-if="currentMenu === 'about' && isAdmin" class="glass-panel section-panel about-section">
+                        <div class="about-hero">
+                            <div class="about-hero__mark" aria-hidden="true">i</div>
+                            <div>
+                                <p class="subtle-label">项目说明</p>
+                                <h2 class="about-hero__title">关于 ECS Controller</h2>
+                                <p class="about-hero__copy">阿里云 ECS 实例、流量与自动化控制台。</p>
+                            </div>
+                        </div>
+
+                        <div class="about-grid">
+                            <div class="metric-card update-center-card" :class="{ 'has-update': hasAvailableUpdate }">
+                                <div class="update-center-card__head">
+                                    <div class="update-center-card__intro">
+                                        <div class="update-center-card__eyebrow">
+                                            <p class="subtle-label">版本中心</p>
+                                            <span v-if="hasAvailableUpdate" class="update-center-card__state update-center-card__state--new">
+                                                <span class="update-center-card__state-dot"></span>
+                                                发现新版本
+                                            </span>
+                                            <span v-else-if="updateInfo.latest?.version" class="update-center-card__state">
+                                                <span class="update-center-card__state-dot"></span>
+                                                已完成检查
+                                            </span>
+                                        </div>
+                                        <div class="update-center-card__title-row">
+                                            <h3 class="text-lg font-bold">在线更新</h3>
+                                        </div>
+                                        <p class="update-center-card__subtitle">仅拉取已发布的 Docker 镜像，部署机器不会执行镜像构建。</p>
+                                    </div>
+
+                                    <a :href="updateInfo.repository_url || 'https://github.com/Kori1c/ecs-controller'" target="_blank" rel="noopener noreferrer" class="update-center-card__link" aria-label="打开 GitHub 项目">
+                                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.25c-3.34.73-4.04-1.61-4.04-1.61-.55-1.4-1.34-1.77-1.34-1.77-1.09-.75.08-.74.08-.74 1.2.09 1.84 1.23 1.84 1.23 1.07 1.83 2.8 1.3 3.48.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.29-1.23 3.29-1.23.66 1.65.25 2.87.13 3.17.76.84 1.23 1.91 1.23 3.22 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"/></svg>
+                                        <span>GitHub</span>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                                    </a>
+                                </div>
+
+                                <div class="update-center-card__body">
+                                    <div class="update-release" aria-label="版本对比">
+                                        <div class="update-release__version">
+                                            <span class="update-release__label">当前版本</span>
+                                            <div class="update-release__value-row">
+                                                <strong class="update-release__value">{{ updateInfo.current_version || 'dev' }}</strong>
+                                            </div>
+                                        </div>
+                                        <div class="update-release__connector" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+                                        </div>
+                                        <div class="update-release__version" :class="{ 'latest-version': hasAvailableUpdate }">
+                                            <span class="update-release__label">最新版本</span>
+                                            <div class="update-release__value-row">
+                                                <strong class="update-release__value">{{ updateInfo.latest?.version || '未检查' }}</strong>
+                                                <span v-if="hasAvailableUpdate" class="update-release__badge">可更新</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="update-center-card__actions">
+                                        <button @click="handleUpdateAction" :class="hasAvailableUpdate ? 'solid-button' : 'ghost-button'" :disabled="checkingUpdate || startingUpdate || updateState.status === 'queued' || updateState.status === 'running'">
+                                            {{ checkingUpdate ? '检查中...' : startingUpdate ? '提交中...' : hasAvailableUpdate ? '立即更新' : '检查更新' }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div v-if="updateState.status === 'queued' || updateState.status === 'running'" class="update-center-card__progress" aria-live="polite">
+                                    <div class="update-center-card__progress-head">
+                                        <span>在线更新 · {{ updatePhaseText(updateState.phase, updateState.status) }}</span>
+                                        <strong>{{ Number(updateState.progress || 0) }}%</strong>
+                                    </div>
+                                    <div class="update-progress"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
+                                    <p class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</p>
+                                </div>
+                                <div v-else-if="updateState.status === 'success' && updateReloadPending" class="update-center-card__notice is-success" aria-live="polite">
+                                    <span class="update-center-card__notice-icon">✓</span>
+                                    <div>
+                                        <strong>更新完成，正在刷新页面</strong>
+                                        <p>{{ updateState.message || '服务已切换到最新版本，请稍候。' }}</p>
+                                    </div>
+                                </div>
+                                <div v-else-if="updateState.status === 'error'" class="update-center-card__notice is-error">
+                                    <span class="update-center-card__notice-icon">!</span>
+                                    <div>
+                                        <strong>更新失败</strong>
+                                        <p>{{ updateState.message || '请查看系统日志获取详细信息。' }}</p>
+                                    </div>
+                                </div>
+
+                                <div v-if="updateInfo.configured === false || (updateInfo.message && updateInfo.configured !== false)" class="update-center-card__notice" :class="{ 'is-warning': updateInfo.configured === false }">
+                                    <span class="update-center-card__notice-icon">{{ updateInfo.configured === false ? '!' : 'i' }}</span>
+                                    <div>
+                                        <strong>{{ updateInfo.configured === false ? '当前部署不支持在线更新' : hasAvailableUpdate ? '已检测到可用镜像' : '检查结果' }}</strong>
+                                        <p>{{ updateInfo.configured === false ? '请使用 install.sh 更新；在线更新只会拉取已发布的 Docker 镜像。' : updateInfo.message }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <aside class="metric-card about-donation-card">
+                                <div class="about-donation-card__head">
+                                    <div>
+                                        <p class="subtle-label">支持项目</p>
+                                        <h3 class="mt-1 text-lg font-bold">打赏支持</h3>
+                                        <p class="about-donation-card__copy">如果这个工具对你有帮助，欢迎赏杯咖啡。</p>
+                                    </div>
+                                    <div class="about-donation-card__badge" aria-hidden="true">♡</div>
+                                </div>
+                                <img src="/static/donation-code.jpg" alt="项目赞赏码" class="about-donation-card__code">
+                                <div class="about-donation-card__wallets">
+                                    <div><strong>USDT-TRC20</strong><br><code>TMBmXngHcKtNo9nLxTCJcGTfNutsbb9rp3</code></div>
+                                    <div><strong>USDT-Polygon / BSC / ERC20 / ArbitrumOne</strong><br><code>0x846ad38ed7159aee70b0ebd8ec39ad2d7b32835b</code></div>
+                                </div>
+                            </aside>
                         </div>
                     </section>
                 </main>
@@ -5294,8 +5476,8 @@
                     }
                 };
                 const savedNavigation = readNavigationState();
-                const validMenus = ['status', 'manage', 'accounts', 'settings', 'logs'];
-                const validSettingsTabs = ['global', 'ddns', 'notifications', 'updates'];
+                const validMenus = ['status', 'manage', 'accounts', 'settings', 'logs', 'about'];
+                const validSettingsTabs = ['global', 'ddns', 'notifications'];
                 const validNotifyTabs = ['email', 'telegram', 'webhook'];
                 const validLogTabs = ['action', 'heartbeat'];
                 const currentMenu = ref(validMenus.includes(savedNavigation.menu) ? savedNavigation.menu : 'status');
@@ -5652,8 +5834,7 @@
                 const settingsItems = [
                     { key: 'global', label: '全局设置', description: '运行参数、阈值与费用' },
                     { key: 'ddns', label: 'DDNS', description: '域名与公网 IP 同步' },
-                    { key: 'notifications', label: '通知中心', description: '邮件、Telegram、回调' },
-                    { key: 'updates', label: '版本更新', description: '检查与在线更新' }
+                    { key: 'notifications', label: '通知中心', description: '邮件、Telegram、回调' }
                 ];
 
                 const menuItems = computed(() => {
@@ -5691,6 +5872,12 @@
                                 label: '系统日志',
                                 description: '操作与心跳记录',
                                 icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>'
+                            },
+                            {
+                                key: 'about',
+                                label: '关于',
+                                description: '版本、项目与打赏',
+                                icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7.2h.01"/></svg>'
                             }
                         );
                     }
@@ -7188,18 +7375,16 @@
                     } else {
                         stopLogPolling();
                     }
-                };
 
-                watch(currentMenu, syncCurrentMenu);
-                watch([currentMenu, currentSettingsTab, currentNotifyTab, currentLogTab], persistNavigationState);
-
-                watch(currentSettingsTab, async (tab) => {
-                    if (tab === 'updates' && isAdmin.value) {
+                    if (menu === 'about' && isAdmin.value) {
                         await checkForUpdates({ silent: true });
                     } else if (!updatePending) {
                         stopUpdatePolling();
                     }
-                });
+                };
+
+                watch(currentMenu, syncCurrentMenu);
+                watch([currentMenu, currentSettingsTab, currentNotifyTab, currentLogTab], persistNavigationState);
 
                 watch(isAdmin, async (value) => {
                     if (value) {

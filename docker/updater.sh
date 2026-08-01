@@ -15,7 +15,9 @@ mkdir -p "$state_dir"
 rmdir "$lock_dir" 2>/dev/null || true
 
 json_escape() {
-    printf '%s' "$1" | awk 'BEGIN { ORS="" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\r/, ""); printf "%s\\n", $0 }'
+    # Keep serialized values free of trailing characters so the web UI can
+    # match request IDs and commits while polling the status file.
+    printf '%s' "$1" | awk 'BEGIN { ORS="" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\r/, ""); printf "%s", $0 }'
 }
 
 write_status() {

@@ -168,6 +168,8 @@ func (s *Store) migrate() error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_active ON jobs(kind, entity_key) WHERE status IN ('queued','running','retry')`,
 		`CREATE TABLE IF NOT EXISTS telegram_bot_state (key TEXT PRIMARY KEY, value TEXT)`,
 		`CREATE TABLE IF NOT EXISTS telegram_action_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT UNIQUE NOT NULL, user_id TEXT NOT NULL, chat_id TEXT NOT NULL, action TEXT NOT NULL, account_id INTEGER NOT NULL, payload TEXT DEFAULT '', expires_at INTEGER NOT NULL, used_at INTEGER DEFAULT 0, created_at INTEGER NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS passkey_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, credential_id TEXT UNIQUE NOT NULL, credential_data TEXT NOT NULL, created_at INTEGER NOT NULL, last_used_at INTEGER DEFAULT 0)`,
+		`CREATE TABLE IF NOT EXISTS passkey_challenges (id TEXT PRIMARY KEY, kind TEXT NOT NULL, session_id TEXT DEFAULT '', session_data TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
 	}
 	for _, statement := range statements {
 		if _, err := s.DB.Exec(statement); err != nil {
@@ -580,6 +582,9 @@ func (s *Store) PruneMaintenance(now time.Time) error {
 		return err
 	}
 	if _, err = s.DB.Exec(`DELETE FROM telegram_action_tokens WHERE expires_at<? OR (used_at>0 AND used_at<?)`, now.Unix(), now.Add(-24*time.Hour).Unix()); err != nil {
+		return err
+	}
+	if _, err = s.DB.Exec(`DELETE FROM passkey_challenges WHERE expires_at<?`, now.Unix()); err != nil {
 		return err
 	}
 	if _, err = s.DB.Exec(`DELETE FROM jobs WHERE status IN ('done','failed') AND updated_at<?`, now.Add(-30*24*time.Hour).Unix()); err != nil {

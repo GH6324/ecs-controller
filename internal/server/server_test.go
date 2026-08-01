@@ -181,6 +181,91 @@ func TestAdminPasswordCanBeChangedFromConfig(t *testing.T) {
 	resp.Body.Close()
 }
 
+func TestPasswordLoginCanBeDisabledAfterPasskeyIsRegistered(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.SetAdminPassword("start1"); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	httpSrv := httptest.NewServer(srv.Handler())
+	defer httpSrv.Close()
+	client := &http.Client{}
+
+	if err := srv.saveConfig(map[string]any{"password_login_enabled": false}); err == nil {
+		t.Fatal("password login was disabled without a Passkey")
+	}
+	if got := st.GetSetting("password_login_enabled", ""); got != "" && got != "1" {
+		t.Fatalf("failed disable changed the setting: %q", got)
+	}
+
+	if err := st.SavePasskeyCredential("test-credential", `{"id":"test-credential"}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.saveConfig(map[string]any{"password_login_enabled": false}); err != nil {
+		t.Fatalf("disable password login: %v", err)
+	}
+	if got := st.GetSetting("password_login_enabled", ""); got != "0" {
+		t.Fatalf("password login setting=%q, want 0", got)
+	}
+
+	resp := postJSON(t, client, httpSrv.URL+"/index.php?action=login", map[string]any{"password": "start1"}, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("disabled password login status: %d body=%s", resp.StatusCode, body)
+	}
+	var disabledResponse map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&disabledResponse); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	message, _ := disabledResponse["message"].(string)
+	if !strings.Contains(message, "Passkey") {
+		t.Fatalf("disabled password login message=%#v", disabledResponse)
+	}
+
+	if err := srv.saveConfig(map[string]any{"password_login_enabled": true}); err != nil {
+		t.Fatalf("re-enable password login: %v", err)
+	}
+	resp = postJSON(t, client, httpSrv.URL+"/index.php?action=login", map[string]any{"password": "start1"}, nil)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("re-enabled password login status: %d body=%s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+}
+
+func TestPasskeyWebAuthnUsesForwardedBrowserOrigin(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+
+	req := httptest.NewRequest(http.MethodPost, "https://internal:8080/index.php?action=passkey_login_start", nil)
+	req.Host = "internal:8080"
+	req.Header.Set("X-Forwarded-Host", "console.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	wa, err := srv.passkeyWebAuthn(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wa.Config.RPID != "console.example.com" {
+		t.Fatalf("RP ID=%q, want console.example.com", wa.Config.RPID)
+	}
+	if len(wa.Config.RPOrigins) != 1 || wa.Config.RPOrigins[0] != "https://console.example.com" {
+		t.Fatalf("RP origins=%#v, want https://console.example.com", wa.Config.RPOrigins)
+	}
+}
+
 func TestNotificationSwitchesPersistAndReadBack(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {

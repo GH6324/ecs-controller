@@ -61,6 +61,63 @@ func TestSecretsAndAccountsAreEncrypted(t *testing.T) {
 	}
 }
 
+func TestPasskeyCredentialsAndChallengesAreEncryptedAndOneTime(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	credentialData := `{"id":"credential","publicKey":"key"}`
+	if err := s.SavePasskeyCredential("credential-id", credentialData); err != nil {
+		t.Fatal(err)
+	}
+	var rawCredential string
+	if err := s.DB.QueryRow(`SELECT credential_data FROM passkey_credentials WHERE credential_id=?`, "credential-id").Scan(&rawCredential); err != nil {
+		t.Fatal(err)
+	}
+	if rawCredential == credentialData || !strings.HasPrefix(rawCredential, "ENC1") {
+		t.Fatalf("passkey credential was not encrypted: %q", rawCredential)
+	}
+	credentials, err := s.PasskeyCredentials()
+	if err != nil || len(credentials) != 1 || credentials[0].Data != credentialData {
+		t.Fatalf("passkey credential round trip: %#v, %v", credentials, err)
+	}
+
+	if err := s.SavePasskeyChallenge("challenge-id", "login", "", `{"challenge":"value"}`, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	var rawChallenge string
+	if err := s.DB.QueryRow(`SELECT session_data FROM passkey_challenges WHERE id=?`, "challenge-id").Scan(&rawChallenge); err != nil {
+		t.Fatal(err)
+	}
+	if rawChallenge == `{"challenge":"value"}` || !strings.HasPrefix(rawChallenge, "ENC1") {
+		t.Fatalf("passkey challenge was not encrypted: %q", rawChallenge)
+	}
+	data, ok, err := s.ConsumePasskeyChallenge("challenge-id", "login", "")
+	if err != nil || !ok || data != `{"challenge":"value"}` {
+		t.Fatalf("passkey challenge round trip: data=%q ok=%v err=%v", data, ok, err)
+	}
+	if _, ok, err := s.ConsumePasskeyChallenge("challenge-id", "login", ""); err != nil || ok {
+		t.Fatalf("passkey challenge was reusable: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestExpiredPasskeyChallengeCannotBeConsumed(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.SavePasskeyChallenge("expired", "register", "session", `{"challenge":"expired"}`, -time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if data, ok, err := s.ConsumePasskeyChallenge("expired", "register", "session"); err != nil || ok || data != "" {
+		t.Fatalf("expired passkey challenge was accepted: data=%q ok=%v err=%v", data, ok, err)
+	}
+}
+
 func contains(value, needle string) bool {
 	return len(needle) > 0 && len(value) >= len(needle) && stringIndex(value, needle) >= 0
 }

@@ -1,297 +1,96 @@
-# ecs-controller 🌩️
+# ecs-controller
 
-<p align="center">
-  <img src="./icon.png" width="120" height="120" alt="ecs-controller Logo">
-</p>
+一个简单的阿里云 ECS 管理面板，可以查看实例状态和流量，并在流量达到阈值时自动关机，避免产生额外费用。
 
-> **阿里云 ECS 管理与流量监控控制台**
-> 
-> 专为 **MJJ** 大佬设计。旨在最大化榨干阿里云 CDT 200GB 免费流量，集成流量实时监控、自动熔断保护、抢占式实例保活、**实例规格与价格透明展示**于一体。
+> 阿里云流量数据可能存在延迟，自动关机不能保证绝对不会产生费用。
 
-## ⚠️ 免责声明
+## 部署
 
-1. **配置参考**：本项目提供的默认一键创建配置仅供参考，请在下单前务必核对阿里云最新的 API 返回价格。
-2. **代码修改**：代码完全开源，您可以根据个人需求自行修改逻辑或 UI。
-3. **AI 开发声明**：本项目由 **AI (Antigravity)** 深度参与开发。作者已尽最大努力确保核心功能（如流量熔断、自动释放）的逻辑正确性。
-4. **Bug 修复**：由于云平台 API 变动或环境差异，如遇见 Bug 建议先行尝试自行修复，或提交 **Issue / PR**，由于精力有限，作者不保证实时维护。
-5. **风险自担**：因使用本脚本、或是阿里云 API 异常导致的相关资源损失或超支费用，作者概不负责。
+准备一台安装了 Docker 的公网 Linux 服务器。如果使用域名，请先将域名解析到服务器 IP。
 
----
-
-## 🆕 最近更新
-
-- 完成 Go 单进程迁移：HTTP API、SQLite、任务队列、监控、自动化任务和 Telegram 控制统一由 Go 服务运行。
-- 清理旧 PHP 源码、Composer 依赖以及 Nginx/PHP-FPM/Cron 容器配置，运行时不再依赖 PHP 环境。
-- Telegram 菜单改为“首页总览 → 流量/实例列表 → 实例详情”的分层导航，实例按钮直接显示运行状态。
-- 实例详情补充规格、IP、实例流量和最后同步时间，流量使用率统一按整数显示。
-- 保留旧版本 SQLite、加密密钥和密码哈希迁移兼容，已有部署可以平滑切换到 Go 版本。
-- 保留页面 Logo 自定义、一键创建 ECS、释放队列和移动端布局优化。
-- 增加 Docker 在线更新：可在前端检查 GitHub 最新提交；只有对应的预构建镜像发布后才允许更新。
-
----
-
-## 🚀 快速部署
-
-当前容器使用 Go 单进程版本：HTTP API、SQLite、任务 worker、监控 worker 和 Telegram 控制 worker 在同一个可优雅关闭的服务中运行。
-
-### Docker 一键部署
-Colima、Docker Desktop 和 Linux Docker 均可使用。Compose 会创建非 root 应用使用的 named volume，并把旧版本的 `./data` 目录作为只读迁移源；首次启动时若 volume 为空，会自动复制旧 SQLite 数据和加密密钥。
-
-首次部署可以直接使用远程 Bash 安装脚本：
+在服务器上运行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh \
+  | env ECS_COOKIE_SECURE=1 bash
 ```
 
-脚本会自动克隆或更新仓库、检查 Docker；如果检测到已安装但未运行的 Colima，会尝试启动 Colima，然后通过 Docker Compose 拉取 GitHub Actions 发布的预构建镜像并启动容器。部署机器不会构建 Docker 镜像。健康检查通过后会输出访问地址和首次初始化 token；访问 `http://127.0.0.1:43211`，在初始化向导中填入该 token。
+安装脚本会自动下载镜像并启动服务，不会在服务器上编译镜像。服务默认只监听服务器本机的 `43211` 端口，请通过你现有的 HTTPS 访问方式打开面板，不要直接开放这个端口。
 
-默认镜像为 `docker.io/kori1c/ecs-controller` 和 `docker.io/kori1c/ecs-controller-updater`，主服务按 `sha-<Git commit>` 使用版本固定的多架构镜像。也可以通过 `ECS_IMAGE_REPOSITORY`、`ECS_UPDATER_IMAGE_REPOSITORY`、`ECS_IMAGE_TAG` 和 `ECS_UPDATER_IMAGE_TAG` 自定义镜像地址或标签。
+公网使用 Passkey 时必须使用 HTTPS。
 
-管理端口默认只绑定到本机。如需公网访问，请在前面配置 HTTPS 反向代理，并设置 `ECS_COOKIE_SECURE=1`；不要直接把管理端口暴露到公网。
+### 本地测试
 
-### Passkey 快速登录
+在自己的电脑上测试时，可以使用 Docker Desktop 或 Colima，安装后访问 `http://127.0.0.1:43211`。
 
-首次使用时先用管理员密码登录，在“系统设置 → 全局设置”中点击“设置 Passkey”。浏览器会调用设备指纹、面容、系统 PIN 或安全密钥完成注册；注册后登录页会出现“使用 Passkey 登录”，原有密码登录仍然保留。可以在多个设备上重复添加 Passkey，但请至少保留一种可用的密码或 Passkey 作为备用登录方式。
+## 第一次使用
 
-注册至少一个 Passkey 后，设置页会出现“允许密码登录”开关。关闭后，登录页和后端密码登录接口都会拒绝管理员密码，只能使用 Passkey；通过 Passkey 登录后可以重新打开该开关。建议先在两个设备上注册 Passkey，并在关闭密码登录前确认至少一个 Passkey 可以正常使用，否则需要通过恢复数据卷或手动修改 SQLite 设置进行恢复。
+1. 安装完成后，脚本会显示一个初始化 token。
+2. 打开网页，输入 token 并设置管理员密码，密码至少 6 位。
+3. 进入“账号管理”，添加阿里云账号。
+4. 在“系统设置”中设置流量阈值、自动关机和通知方式。
 
-Passkey 只在安全来源上可用：公网部署必须通过 HTTPS 访问，`http://localhost` 仅适合本地测试。服务会自动根据当前访问域名和协议生成 WebAuthn 的 RP ID 与 Origin，不需要修改 Compose 或其他配置文件。通过反向代理部署时，请保留并正确传递 `Host`、`X-Forwarded-Host` 和 `X-Forwarded-Proto`，否则服务无法判断浏览器实际访问的域名。
+如果忘记了初始化 token，可以查看日志：
 
-Passkey 凭据和登录/注册挑战会使用现有 `.secret_encryption.key` 加密后存入 SQLite；请像保护管理员密码和阿里云密钥一样备份并保护整个数据卷。挑战有效期为 5 分钟，完成或失败后不可重复使用。
-
-> 迁移说明：如果从旧版本升级，首次启动时会把 `./data` 中的 SQLite 数据和加密密钥复制到 Go 服务使用的 named volume；复制完成后即可移除旧的 PHP 部署文件。Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级实例流量账本、CDT 账号汇总、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
-
-### 前端在线更新
-
-通过上面的 `install.sh` 或 `deploy.sh` 部署后，系统会额外启动一个独立的 `ecs-controller-updater` 容器。在“关于 → 版本中心”中点击“检查更新”，系统会显示当前版本、最新版本和 GitHub 项目地址；只有源码更新且目标提交对应的预构建镜像已经发布时，才会弹窗询问是否更新。
-
-1. 从 GitHub 获取目标提交并校验版本没有变化。
-2. 检查部署目录是否存在未提交修改；存在修改时会停止，避免覆盖本地文件。
-3. 再次确认目标提交的预构建 Docker 镜像存在，然后拉取镜像。
-4. 快进代码、切换镜像并重启主容器；整个过程不会在部署机器上构建镜像。
-5. 拉取或重启失败时尝试恢复更新前的 Git 提交和镜像，并在页面显示结果。
-
-镜像由 GitHub Actions 在推送到 `main` 后构建并推送；如果 Actions 尚未完成，前端会提示镜像尚未发布，不能提前更新。更新只会保留 Docker named volume 中的 SQLite 数据、加密密钥和配置。updater 容器单独挂载 Docker socket 和部署目录，主业务容器不会直接访问 Docker socket；管理端口默认只监听本机，仍建议不要把它直接暴露到公网。旧版本已经部署的环境需要重新执行一次 `install.sh`，让 Compose 创建 updater 容器并切换到预构建镜像后，前端在线更新才会可用。
-
----
-
-## 🔑 获取阿里云密钥
-
-为了让系统能够正常获取流量数据并管理实例，您需要准备具有相关权限的阿里云 AccessKey：
-
-1. **登录阿里云控制台**，前往 [RAM 访问控制 - 用户](https://ram.console.aliyun.com/users)。
-2. **创建用户**：点击“创建用户”，勾选“OpenAPI 调用访问”。
-3. **获取密钥**：保存好生成的 `AccessKey ID` 和 `AccessKey Secret`。
-4. **添加权限**：建议创建自定义 RAM 权限策略，按需授予最小权限。
-
-### 核心功能最低权限
-
-如果只使用实例同步、流量监控、自动停机、手动开关机和释放实例，至少需要：
-
-```text
-cms:QueryMetricList
-ecs:DescribeInstances
-ecs:DescribeInstanceStatus
-ecs:StartInstance
-ecs:StopInstance
-ecs:DeleteInstance
-cdt:ListCdtInternetTraffic
+```bash
+docker logs ecs-controller 2>&1 | grep '初始化 token'
 ```
 
-其中 `cms:QueryMetricList` 用于授权调用 `DescribeMetricList` 获取 ECS 公网出口流量，缺少后会导致流量统计不可用或自动停机不准确。
+## 阿里云权限
 
-### 全功能推荐权限
+请在阿里云 RAM 中创建一个用于本项目的用户，开启“OpenAPI 调用访问”，然后把 AccessKey ID 和 AccessKey Secret 填入账号管理。
 
-如果需要使用本项目的全部功能，包括一键创建 ECS、自动创建网络与安全组、EIP 申请/绑定/释放、更换公网 IP、消费情况查询，建议使用以下自定义策略：
+项目会根据功能使用以下权限：
 
-```json
-{
-  "Version": "1",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecs:DescribeRegions",
-        "ecs:DescribeZones",
-        "ecs:DescribeInstances",
-        "ecs:DescribeInstanceStatus",
-        "ecs:DescribeInstancesFullStatus",
-        "ecs:DescribeInstanceTypes",
-        "ecs:DescribeImages",
-        "ecs:DescribeAvailableResource",
-        "ecs:DescribeSecurityGroups",
-        "ecs:StartInstance",
-        "ecs:StopInstance",
-        "ecs:DeleteInstance",
-        "ecs:RunInstances",
-        "ecs:CreateSecurityGroup",
-        "ecs:AuthorizeSecurityGroup"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "vpc:DescribeVpcs",
-        "vpc:DescribeVSwitches",
-        "vpc:CreateVpc",
-        "vpc:CreateVSwitch",
-        "vpc:DescribeEipAddresses",
-        "vpc:AllocateEipAddress",
-        "vpc:AssociateEipAddress",
-        "vpc:UnassociateEipAddress",
-        "vpc:ReleaseEipAddress"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cms:QueryMetricList"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cdt:ListCdtInternetTraffic"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "bssapi:QueryAccountBalance",
-        "bssapi:DescribeInstanceBill",
-        "bssapi:QueryBillOverview"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
+- **实例管理**：ECS
+- **实例流量**：CMS
+- **账号流量**：CDT
+- **创建实例和 EIP**：VPC、ECS
+- **消费情况**：账单服务
 
-如果不需要消费情况展示，可以去掉 `bssapi:*` 相关权限。
+如果出现“CMS 不可用”或“CDT 不可用”，通常是对应的 RAM 权限没有开启。只查看和管理已有实例时，不需要开通创建实例、EIP 和账单权限。
 
----
+## 主要功能
 
-## ✨ 核心功能
+- 查看 ECS 状态、规格、IP 和流量。
+- 查看 CMS 实例流量和 CDT 账号流量。
+- CMS 或 CDT 任一流量达到阈值时自动关机。
+- 定时开关机和抢占式实例自动恢复。
+- 创建、启动、停止和释放 ECS。
+- Telegram、邮件和 Webhook 通知。
+- Passkey 免密码登录。
 
+## 在线更新
 
-### 🛡️ 流量盾牌 (CDT 监控)
-- **多账户聚合**：支持同时管理多个阿里云 AK/SK，多区域实例一屏尽览。
-- **自然月流量重置**：自动适配阿里云 CDT 计费周期，每月 1 号零点自动重置已用流量统计。
-- **熔断机制**：支持设定 **告警阈值 (如 95%)**，触发时自动执行关机动作。
-- **灵活关机模式**：可选 **普通停机 (KeepCharging)** 或 **节省停机 (StopCharging/释放计算资源停止计费)**。
+进入“关于 → 版本中心”，点击检查更新即可。
 
-### ⚡ 自动化高阶管理
-- **异步安全释放**：彻底解决释放逻辑响应缓慢问题。点击后后台接管，自动执行“强制离线 -> 等待状态 -> 物理销毁”全流程，无需前台苦等。
-- **抢占式实例保活**：实时守护低成本 Spot 实例，检测到非预期停机时（如被回收）自动重试拉起。
-- **定时任务清单**：支持为指定实例设置每日定时开机、定时关机计划（自定义时间点）。
-- **ECS 快速创建**：支持从预设规格中一键拉起新实例（默认采用最低配置、最低价格方案），并自动配置安全组与防火墙规则。
-- **预检与成本预览**：创建前自动调用阿里云 API 进行库存预检与其费用估算，拒绝盲目下单。
-- **初次登录信息保护**：针对新建实例，系统仅在创建成功的瞬间展示初始密码，确保 AK/SK 与凭据安全。
-- **DDNS 联动**：深度集成 **Cloudflare**，实例重启 IP 变更后自动同步 A 记录。
+只有 GitHub 上的 Docker 镜像已经准备好时才会更新，部署机器不会构建镜像。更新不会删除账号、配置和流量数据。
 
-### 📊 成本与审计
-- **费用中心**：实时拉取账号 **可用余额**，并预估当月实例已产生账单金额。
-- **实时日志审计**：详细记录系统心跳、API 调用状态、告警触发记录，支持分级清理，保证系统轻量运行。
-- **一键同步**：支持主动从阿里云云端同步最新机器规格、状态、公网 IP 等所有属性。
+如果旧版本没有在线更新功能，重新运行一次安装命令即可。
 
-### 📢 预警系统
-- **多通路覆盖**：集成 **Telegram (纸飞机)**、**SMTP 邮件** 及 **通用 Webhook** 接口。
-- **状态变更通知**：实例关机、启动、释放成功、流量超标时均会发送详尽的富文本通知。
+## 安全提醒
 
----
+- 不要把 AccessKey、AccessKey Secret 或初始化 token 发给别人。
+- 公网访问请使用 HTTPS，不要直接暴露 `43211` 端口。
+- 建议使用 RAM 子账号，不要直接使用阿里云主账号密钥。
 
-## 💡 省钱小秘籍 (Saving Tips)
+## Passkey
 
-- **流量熔断**：系统默认检测到流量即将用尽时自动关机（建议配合“节省停机”模式），确保不产生额外扣费，真正做到“用完即止”。
-- **折扣充值**：本项目可搭配 [portal.acm.ee](https://portal.acm.ee/) 使用，享受阿里云七折充值优惠，叠加 CDT 200GB 免费流量，实现在线极致性价比。
+登录后进入“系统设置 → 全局设置”，点击“设置 Passkey”。以后可以使用指纹、面容、系统 PIN 或安全密钥登录。
 
----
+公网使用 Passkey 时必须配置 HTTPS；本地测试可以使用 `http://localhost`。
 
-## 📸 界面预览
+## 请喝咖啡
 
-> 以下截图来自测试环境，仅用于展示界面结构与核心流程。正式使用时请妥善保管 AK/SK、服务器密码、通知 Token 等敏感信息。
+如果这个工具对你有帮助，欢迎支持项目：
 
-### 实例状态总览
+![项目赞赏码](./static/donation-code.jpg)
 
-卡片式展示所有已同步 ECS：运行状态、区域、实例编号、公网地址、出口流量、带宽峰值、阈值与最后同步时间一屏可见。
+- USDT-TRC20：`TMBmXngHcKtNo9nLxTCJcGTfNutsbb9rp3`
+- USDT-Polygon / BSC / ERC20 / ArbitrumOne：`0x846ad38ed7159aee70b0ebd8ec39ad2d7b32835b`
 
-![实例状态总览](./image/截屏2026-04-16%2012.15.51.png)
+## 相关链接
 
-### 实例管理
-
-集中管理账号下的全部实例，支持手动同步、启动、停止、释放，以及查看实例规格、出口流量和公网带宽。
-
-![实例管理](./image/截屏2026-04-16%2012.15.56.png)
-
-### 账号管理
-
-账号以列表方式维护，支持备注名、区域、站点、账号可用流量、消费情况与同步状态展示；新增账号使用弹窗填写，避免页面过长。
-
-![账号管理](./image/截屏2026-04-16%2012.16.05.png)
-
-### 系统设置
-
-全局阈值、实例同步频率、停机方式、自动开机、抢占式保活、费用分析、DDNS 与通知配置统一收纳到系统设置中。
-
-![系统设置](./image/截屏2026-04-16%2012.16.12.png)
-
-### 系统日志
-
-区分动作日志与心跳日志，方便排查接口调用、实例状态变化、流量熔断、DDNS 同步和通知推送结果。
-
-![系统日志](./image/截屏2026-04-16%2012.16.18.png)
-
-### 一键创建 ECS
-
-创建前会生成配置清单：实例规格、系统镜像、系统盘、网络、安全组、公网带宽与费用提示都会在确认前展示，避免盲目下单。
-
-![一键创建 ECS 配置清单](./image/截屏2026-04-16%2011.24.03.png)
-
-### 新增账号弹窗
-
-账号录入通过弹窗完成，填写备注名、AK、区域、站点和账号可用流量后即可保存并同步实例。
-
-![新增账号弹窗](./image/截屏2026-04-16%2012.16.27.png)
-
----
-
-
-
-## 🛠️ 技术架构
-
-- **Backend**: Go 单进程 HTTP 服务，内置 action API、任务 worker、监控 worker 和 Telegram 控制 worker。
-- **Storage**: SQLite 3 WAL，负责配置、账号、session、任务队列、流量账本、账单缓存和审计日志；敏感字段使用 SecretBox 加密。
-- **Cloud adapter**: 通过轻量 Alibaba RPC 客户端完成 ECS、VPC、EIP、CMS、CDT 和 BSS 调用，支持 fake/mock client 做离线测试。
-- **Frontend**: Vue 3 + 静态资源；Go 服务直接托管页面和兼容 action API。
-- **Runtime**: Docker/Colima/Linux Docker 均可运行；Compose 使用 named volume、非 root 应用用户和 `/healthz` 健康检查。
-
----
-
-## ☕ 赏杯咖啡 (Donation)
-
-如果您觉得这个工具对您有帮助，阔佬随手赏杯咖啡：
-
-![赞赏码](./static/donation-code.jpg)
-
-- **USDT-TRC20**: `TMBmXngHcKtNo9nLxTCJcGTfNutsbb9rp3`
-- **USDT-Polygon**: `0x846ad38ed7159aee70b0ebd8ec39ad2d7b32835b`
-- **USDT-BSC**: `0x846ad38ed7159aee70b0ebd8ec39ad2d7b32835b`
-- **USDT-ERC20**: `0x846ad38ed7159aee70b0ebd8ec39ad2d7b32835b`
-- **USDT-ArbitrumOne**: `0x846ad38ed7159aee70b0ebd8ec39ad2d7b32835b`
-
----
-
-
-
-
-## 📄 许可协议
-
-本项目遵循 [MIT License](https://opensource.org/licenses/MIT) 开源协议。
-
----
-<p align="center">Made with ❤️ for Aliyun Users</p>
-<p align="center">Based on <a href="https://github.com/wang4386/CDT-Monitor">CDT-Monitor</a></p>
+- 项目地址：https://github.com/Kori1c/ecs-controller
+- 问题反馈：https://github.com/Kori1c/ecs-controller/issues
+- 许可证：[MIT](./LICENSE)

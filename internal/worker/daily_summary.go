@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Kori1c/ecs-controller/internal/app"
+	"github.com/Kori1c/ecs-controller/internal/cloud"
 	"github.com/Kori1c/ecs-controller/internal/notify"
 )
 
@@ -71,6 +72,8 @@ func (w *Worker) dailyTrafficEvent(ctx context.Context, reportDay time.Time) (no
 
 	complete := true
 	cmsLines := make([]string, 0)
+	dayStart := time.Date(reportDay.Year(), reportDay.Month(), reportDay.Day(), 0, 0, 0, 0, reportDay.Location())
+	dayEnd := dayStart.AddDate(0, 0, 1)
 	for _, account := range accounts {
 		if account.InstanceID == "" || account.TrafficAPIStatus == "fallback_cdt" {
 			continue
@@ -80,6 +83,38 @@ func (w *Worker) dailyTrafficEvent(ctx context.Context, reportDay time.Time) (no
 			cmsLines = append(cmsLines, fmt.Sprintf("- %s：数据不可用", accountLabel(account)))
 			continue
 		}
+		client := w.Cloud
+		if w.CloudFactory != nil {
+			client = w.CloudFactory(app.AccountGroup{
+				AccessKeyID:     account.AccessKeyID,
+				AccessKeySecret: account.AccessKeySecret,
+				RegionID:        account.RegionID,
+				SiteType:        account.SiteType,
+			})
+		}
+		if dailyClient, ok := client.(cloud.DailyTrafficClient); ok {
+			bytes, points, err := dailyClient.GetInstanceDailyTraffic(
+				ctx,
+				account.RegionID,
+				account.InstanceID,
+				account.PublicIP,
+				dayStart.UnixMilli(),
+				dayEnd.UnixMilli(),
+			)
+			if err != nil {
+				complete = false
+				cmsLines = append(cmsLines, fmt.Sprintf("- %s：数据不可用", accountLabel(account)))
+				continue
+			}
+			if points == 0 {
+				complete = false
+				cmsLines = append(cmsLines, fmt.Sprintf("- %s：数据不足", accountLabel(account)))
+				continue
+			}
+			cmsLines = append(cmsLines, fmt.Sprintf("- %s：%.2f GB", accountLabel(account), bytes/(1024*1024*1024)))
+			continue
+		}
+
 		traffic, ok, deltaErr := w.Store.DailyTrafficDelta(account.ID, reportDay)
 		if deltaErr != nil {
 			return notify.Event{}, deltaErr

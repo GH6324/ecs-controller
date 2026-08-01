@@ -155,6 +155,29 @@ func TestMonthlyTrafficUsesHourlyCMSData(t *testing.T) {
 	}
 }
 
+func TestDailyTrafficUsesExactCalendarWindow(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("Period") != "3600" {
+			t.Fatalf("daily query used the wrong period: %s", r.URL.Query().Get("Period"))
+		}
+		if r.URL.Query().Get("Length") != "48" {
+			t.Fatalf("daily query used the wrong length: %s", r.URL.Query().Get("Length"))
+		}
+		if r.URL.Query().Get("StartTime") != "1753920000000" || r.URL.Query().Get("EndTime") != "1754006400000" {
+			t.Fatalf("daily query used the wrong range: %s - %s", r.URL.Query().Get("StartTime"), r.URL.Query().Get("EndTime"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{\"Code\":\"200\",\"Datapoints\":\"[{\\\"timestamp\\\":1753923600000,\\\"Average\\\":8}]\"}"))
+	}))
+	defer server.Close()
+
+	service := &Service{CMS: &RPCClient{HTTPClient: server.Client(), Endpoint: server.URL, Version: "2019-01-01", Product: "Cms", AccessKey: "ak", Secret: "sk"}}
+	bytes, points, err := service.GetInstanceDailyTraffic(context.Background(), "cn-hongkong", "i-1", "203.0.113.10", 1753920000000, 1754006400000)
+	if err != nil || points != 1 || bytes != 3600 {
+		t.Fatalf("daily traffic: bytes=%v points=%d err=%v", bytes, points, err)
+	}
+}
+
 func TestInstanceFromMapSupportsCurrentECSFieldsAndNestedIPs(t *testing.T) {
 	instance := instanceFromMap(map[string]any{
 		"InstanceId":     "i-1",

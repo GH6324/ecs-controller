@@ -5850,8 +5850,10 @@
 
                 const updateStatusMatchesPending = (data) => {
                     if (!updatePending) return true;
-                    const target = String(data?.target_commit || '').toLowerCase();
-                    const requestID = String(data?.request_id || '');
+                    // Older updater images appended a literal newline to JSON
+                    // identifiers; trim them so upgrades remain trackable.
+                    const target = String(data?.target_commit || '').trim().toLowerCase();
+                    const requestID = String(data?.request_id || '').trim();
                     if (updatePollRequestID && requestID && requestID !== updatePollRequestID) {
                         return false;
                     }

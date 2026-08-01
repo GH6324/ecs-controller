@@ -69,7 +69,15 @@ run_update() {
     fi
 
     write_status running fetching "正在从 GitHub 获取最新代码" 20 "$target" "$current"
-    if ! git -C "$project_dir" fetch --depth=1 origin "$branch"; then
+    # The installer starts with a shallow clone. Unshallow it before merging so
+    # Git can prove that the target commit is a fast-forward of the checkout.
+    shallow="$(git -C "$project_dir" rev-parse --is-shallow-repository 2>/dev/null || printf '%s' false)"
+    if [ "$shallow" = true ]; then
+        fetch_args="--unshallow"
+    else
+        fetch_args=""
+    fi
+    if ! git -C "$project_dir" fetch $fetch_args origin "$branch"; then
         write_status error failed "GitHub 代码获取失败，请检查网络或仓库权限" 0 "$target" "$current"
         return
     fi

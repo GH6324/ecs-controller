@@ -209,16 +209,34 @@ func (s *Service) GetSystemDiskOptions(ctx context.Context, region, zone, instan
 }
 
 func (s *Service) DescribeInstances(ctx context.Context, region string) ([]Instance, error) {
-	result, err := s.ECS.Call(ctx, "DescribeInstances", map[string]string{"RegionId": region, "PageSize": "100"})
-	if err != nil {
-		return nil, err
+	const pageSize = 100
+	const maxPages = 10000
+	instances := make([]Instance, 0)
+	for page := 1; page <= maxPages; page++ {
+		result, err := s.ECS.Call(ctx, "DescribeInstances", map[string]string{
+			"RegionId":   region,
+			"PageNumber": strconv.Itoa(page),
+			"PageSize":   strconv.Itoa(pageSize),
+		})
+		if err != nil {
+			return nil, err
+		}
+		items := mapsAt(result, "Instances.Instance")
+		total := intValue(result["TotalCount"])
+		if total > 0 && len(items) == 0 && len(instances) < total {
+			return nil, fmt.Errorf("DescribeInstances returned an incomplete page")
+		}
+		for _, item := range items {
+			instances = append(instances, instanceFromMap(item))
+		}
+		if total > 0 && len(instances) >= total {
+			return instances, nil
+		}
+		if len(items) < pageSize {
+			return instances, nil
+		}
 	}
-	items := mapsAt(result, "Instances.Instance")
-	instances := make([]Instance, 0, len(items))
-	for _, item := range items {
-		instances = append(instances, instanceFromMap(item))
-	}
-	return instances, nil
+	return nil, fmt.Errorf("DescribeInstances exceeded the pagination safety limit")
 }
 
 func (s *Service) DescribeInstance(ctx context.Context, region, id string) (*Instance, error) {
@@ -228,7 +246,7 @@ func (s *Service) DescribeInstance(ctx context.Context, region, id string) (*Ins
 	}
 	items := mapsAt(result, "Instances.Instance")
 	if len(items) == 0 {
-		return nil, fmt.Errorf("instance %s not found", id)
+		return nil, &APIError{Code: "InvalidInstanceId.NotFound", Message: fmt.Sprintf("instance %s not found", id)}
 	}
 	v := instanceFromMap(items[0])
 	return &v, nil

@@ -241,15 +241,9 @@ func (s *Server) authenticatedAction(w http.ResponseWriter, r *http.Request, act
 	case "logout":
 		s.logout(w, r)
 	case "get_all_instances":
-		if r.URL.Query().Get("sync") == "1" {
-			groups, _ := s.Store.LoadGroups()
-			for _, group := range groups {
-				if _, err := s.syncGroup(group.GroupKey); err != nil {
-					s.Store.AddLog("warning", "手动同步失败: "+err.Error())
-				}
-			}
-		}
 		s.status(w)
+	case "sync_instances":
+		s.syncAllInstances(w)
 	case "preview_ecs_create":
 		s.preview(w, r, data)
 	case "get_ecs_disk_options":
@@ -890,6 +884,14 @@ func (s *Server) task(w http.ResponseWriter, r *http.Request) {
 		s.error(w, 404, "任务不存在")
 		return
 	}
+	if task.Status == "success" {
+		if consumed, consumeErr := s.Store.ConsumeTaskPassword(taskID); consumeErr == nil {
+			task = consumed
+		} else {
+			s.error(w, 500, "任务凭据读取失败")
+			return
+		}
+	}
 	s.json(w, 200, map[string]any{"success": true, "data": taskResponse(task)})
 }
 
@@ -1151,6 +1153,25 @@ func (s *Server) syncGroupAction(w http.ResponseWriter, data map[string]any) {
 		return
 	}
 	s.json(w, 200, map[string]any{"success": true, "count": count})
+}
+
+func (s *Server) syncAllInstances(w http.ResponseWriter) {
+	groups, err := s.Store.LoadGroups()
+	if err != nil {
+		s.error(w, 500, "读取账号组失败: "+err.Error())
+		return
+	}
+	var failures []string
+	for _, group := range groups {
+		if _, err := s.syncGroup(group.GroupKey); err != nil {
+			failures = append(failures, group.GroupKey+": "+err.Error())
+		}
+	}
+	if len(failures) > 0 {
+		s.error(w, 400, "部分账号组同步失败: "+strings.Join(failures, "; "))
+		return
+	}
+	s.status(w)
 }
 
 func (s *Server) syncGroup(groupKey string) (int, error) {
@@ -1465,7 +1486,7 @@ func (s *Server) csrfOK(w http.ResponseWriter, r *http.Request) bool {
 }
 func (s *Server) mutating(a string) bool {
 	switch a {
-	case "save_config", "upload_logo", "clear_logs", "logout", "create_ecs", "control_instance", "delete_instance", "replace_instance_ip", "refresh_account", "sync_account_group", "restore_schedule_block", "send_test_email", "send_test_telegram", "send_test_webhook", "start_update":
+	case "save_config", "upload_logo", "clear_logs", "logout", "create_ecs", "control_instance", "delete_instance", "replace_instance_ip", "refresh_account", "sync_account_group", "sync_instances", "restore_schedule_block", "send_test_email", "send_test_telegram", "send_test_webhook", "start_update":
 		return true
 	}
 	return false
@@ -1485,7 +1506,17 @@ func (s *Server) cloudUnavailable(w http.ResponseWriter) {
 
 func (s *Server) dispatchEvent(ctx context.Context, event notify.Event) {
 	cfg := notify.ConfigFromSettings(s.Store.Settings(), s.Store.OpenSecret)
-	if err := (notify.Dispatcher{Config: cfg}).Dispatch(ctx, event); err != nil {
+	notifyCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- (notify.Dispatcher{Config: cfg}).Dispatch(notifyCtx, event) }()
+	var err error
+	select {
+	case err = <-done:
+	case <-notifyCtx.Done():
+		err = notifyCtx.Err()
+	}
+	if err != nil {
 		s.Store.AddLog("warning", "通知发送失败: "+err.Error())
 	}
 }
@@ -1744,4 +1775,10 @@ func truthy(v any) bool {
 	return false
 }
 func stringOrMap(m map[string]any, k, f string) string { v := stringValue(m[k]); return fallback(v, f) }
-func rctx() context.Context                            { return context.Background() }
+func rctx() context.Context {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	// Callers historically receive only a Context, so arrange cancellation at
+	// the deadline rather than leaking the timer indefinitely.
+	time.AfterFunc(45*time.Second, cancel)
+	return ctx
+}

@@ -3,6 +3,7 @@ package cloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -66,6 +67,44 @@ func TestServicePreflightAndEIPRequestSemantics(t *testing.T) {
 	allocationID, ip, err := service.AllocateEIPWithBandwidth(context.Background(), "cn-test", 20)
 	if err != nil || allocationID != "eip-1" || ip != "203.0.113.10" {
 		t.Fatalf("allocate EIP result: %q %q %v", allocationID, ip, err)
+	}
+}
+
+func TestDescribeInstancesPaginatesAndRejectsIncompletePages(t *testing.T) {
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		page := r.URL.Query().Get("PageNumber")
+		if r.URL.Query().Get("PageSize") != "100" {
+			t.Fatalf("unexpected page size: %s", r.URL.Query().Get("PageSize"))
+		}
+		items := make([]map[string]any, 0)
+		if page == "1" {
+			for i := 0; i < 100; i++ {
+				items = append(items, map[string]any{"InstanceId": fmt.Sprintf("i-%d", i), "Status": "Running"})
+			}
+		} else if page == "2" {
+			items = append(items, map[string]any{"InstanceId": "i-100", "Status": "Stopped"})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"TotalCount": 101, "Instances": map[string]any{"Instance": items}})
+	}))
+	defer server.Close()
+
+	service := &Service{ECS: &RPCClient{HTTPClient: server.Client(), Endpoint: server.URL, Version: "2014-05-26", Product: "Ecs", AccessKey: "ak", Secret: "sk"}}
+	instances, err := service.DescribeInstances(context.Background(), "cn-test")
+	if err != nil || len(instances) != 101 || calls != 2 || instances[100].ID != "i-100" {
+		t.Fatalf("pagination result: count=%d calls=%d err=%v", len(instances), calls, err)
+	}
+
+	emptyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"TotalCount":1,"Instances":{"Instance":[]}}`))
+	}))
+	defer emptyServer.Close()
+	emptyService := &Service{ECS: &RPCClient{HTTPClient: emptyServer.Client(), Endpoint: emptyServer.URL, Version: "2014-05-26", Product: "Ecs", AccessKey: "ak", Secret: "sk"}}
+	if _, err := emptyService.DescribeInstances(context.Background(), "cn-test"); err == nil {
+		t.Fatal("incomplete instance page was accepted")
 	}
 }
 

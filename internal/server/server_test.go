@@ -308,7 +308,14 @@ func TestTaskResponsePreservesFrontendCredentialFields(t *testing.T) {
 	if err := st.CreateTask("task-1", "preview-1", "group-1", "cn-test", "ecs.test", map[string]any{"loginPassword": "Password123!"}); err != nil {
 		t.Fatal(err)
 	}
-	task, err := st.GetTask("task-1")
+	publicTask, err := st.GetTask("task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if publicTask.LoginPassword != "" {
+		t.Fatal("queued task exposed its password")
+	}
+	task, err := st.GetTaskForWorker("task-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,6 +325,17 @@ func TestTaskResponsePreservesFrontendCredentialFields(t *testing.T) {
 	}
 	if response["task_id"] != "task-1" || response["taskId"] != "task-1" {
 		t.Fatalf("task aliases missing: %#v", response)
+	}
+	if err := st.UpdateTask("task-1", map[string]any{"status": "success"}); err != nil {
+		t.Fatal(err)
+	}
+	first, err := st.ConsumeTaskPassword("task-1")
+	if err != nil || first.LoginPassword != "Password123!" {
+		t.Fatalf("first credential read: task=%+v err=%v", first, err)
+	}
+	second, err := st.ConsumeTaskPassword("task-1")
+	if err != nil || second.LoginPassword != "" {
+		t.Fatalf("credential was not one-time: task=%+v err=%v", second, err)
 	}
 }
 

@@ -216,7 +216,7 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
-	if err := s.resetMonthlyTraffic(); err != nil {
+	if err := s.ResetMonthlyTraffic(); err != nil {
 		return err
 	}
 	if err := s.migratePlaintextSecrets(); err != nil {
@@ -283,7 +283,7 @@ func (s *Store) migrateLegacyTrafficStats() error {
 	return nil
 }
 
-func (s *Store) resetMonthlyTraffic() error {
+func (s *Store) ResetMonthlyTraffic() error {
 	month := time.Now().Format("2006-01")
 	if _, err := s.DB.Exec(`UPDATE accounts SET traffic_billing_month=? WHERE traffic_billing_month IS NULL OR traffic_billing_month=''`, month); err != nil {
 		return fmt.Errorf("initialize traffic billing month: %w", err)
@@ -570,6 +570,27 @@ func (s *Store) PruneMaintenance(now time.Time) error {
 		return err
 	}
 	_, err = s.DB.Exec(`DELETE FROM instance_traffic_usage WHERE billing_month<?`, now.AddDate(0, -4, 0).Format("2006-01"))
+	if err != nil {
+		return err
+	}
+	if _, err = s.DB.Exec(`DELETE FROM sessions WHERE expires_at<?`, now.Unix()); err != nil {
+		return err
+	}
+	if _, err = s.DB.Exec(`DELETE FROM login_attempts WHERE attempt_time<?`, now.Add(-24*time.Hour).Unix()); err != nil {
+		return err
+	}
+	if _, err = s.DB.Exec(`DELETE FROM telegram_action_tokens WHERE expires_at<? OR (used_at>0 AND used_at<?)`, now.Unix(), now.Add(-24*time.Hour).Unix()); err != nil {
+		return err
+	}
+	if _, err = s.DB.Exec(`DELETE FROM jobs WHERE status IN ('done','failed') AND updated_at<?`, now.Add(-30*24*time.Hour).Unix()); err != nil {
+		return err
+	}
+	// Keep task status long enough for the UI, but never retain a successful
+	// task's credential indefinitely if the browser never consumes it.
+	if _, err = s.DB.Exec(`UPDATE ecs_create_tasks SET login_password='' WHERE status IN ('success','failed') AND updated_at<?`, now.Add(-24*time.Hour).Unix()); err != nil {
+		return err
+	}
+	_, err = s.DB.Exec(`DELETE FROM ecs_create_tasks WHERE status IN ('success','failed') AND updated_at<?`, now.Add(-30*24*time.Hour).Unix())
 	return err
 }
 
@@ -840,7 +861,7 @@ func boolInt(value bool) int {
 }
 
 func (s *Store) MarkDeleted(id int64) error {
-	_, err := s.DB.Exec(`UPDATE accounts SET is_deleted=1 WHERE id=?`, id)
+	_, err := s.DB.Exec(`UPDATE accounts SET is_deleted=1,access_key_secret='' WHERE id=?`, id)
 	return err
 }
 func (s *Store) MarkReleasing(id int64) error {
@@ -848,7 +869,7 @@ func (s *Store) MarkReleasing(id int64) error {
 	return err
 }
 func (s *Store) PhysicallyDelete(id int64) error {
-	_, err := s.DB.Exec(`UPDATE accounts SET is_deleted=2,instance_status='Released' WHERE id=?`, id)
+	_, err := s.DB.Exec(`UPDATE accounts SET is_deleted=2,instance_status='Released',access_key_secret='' WHERE id=?`, id)
 	return err
 }
 
@@ -1178,7 +1199,9 @@ func (s *Store) UpdateTask(taskID string, fields map[string]any) error {
 	return err
 }
 
-func (s *Store) GetTask(taskID string) (*app.EcsTask, error) {
+// GetTaskForWorker returns the decrypted task credential only to the internal
+// create worker. HTTP callers must use GetTask/ConsumeTaskPassword instead.
+func (s *Store) GetTaskForWorker(taskID string) (*app.EcsTask, error) {
 	var t app.EcsTask
 	var created, updated int64
 	var raw string
@@ -1196,6 +1219,50 @@ func (s *Store) GetTask(taskID string) (*app.EcsTask, error) {
 	_ = json.Unmarshal([]byte(raw), &t.Payload)
 	t.CreatedAt, t.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return &t, nil
+}
+
+// GetTask deliberately never exposes the ECS login password. A successful
+// client poll must call ConsumeTaskPassword to receive it once.
+func (s *Store) GetTask(taskID string) (*app.EcsTask, error) {
+	task, err := s.GetTaskForWorker(taskID)
+	if err != nil {
+		return nil, err
+	}
+	task.LoginPassword = ""
+	return task, nil
+}
+
+// ConsumeTaskPassword atomically clears and returns the password for a
+// successful create task. A second browser/tab receives an empty password.
+func (s *Store) ConsumeTaskPassword(taskID string) (*app.EcsTask, error) {
+	task, err := s.GetTaskForWorker(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task.Status != "success" || task.LoginPassword == "" {
+		task.LoginPassword = ""
+		return task, nil
+	}
+	var sealed string
+	if err := s.DB.QueryRow(`SELECT login_password FROM ecs_create_tasks WHERE task_id=? AND status='success'`, taskID).Scan(&sealed); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			task.LoginPassword = ""
+			return task, nil
+		}
+		return nil, err
+	}
+	result, err := s.DB.Exec(`UPDATE ecs_create_tasks SET login_password='',updated_at=? WHERE task_id=? AND status='success' AND login_password=?`, time.Now().Unix(), taskID, sealed)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if changed == 0 {
+		task.LoginPassword = ""
+	}
+	return task, nil
 }
 
 func (s *Store) LastRun() int64 {
@@ -1218,6 +1285,18 @@ func (s *Store) InstanceTrafficUsage(accountID int64, instanceID, month string) 
 func (s *Store) AddInstanceTraffic(accountID int64, instanceID, month string, deltaBytes float64, lastSampleMS int64) (TrafficSample, error) {
 	now := time.Now().Unix()
 	_, err := s.DB.Exec(`INSERT INTO instance_traffic_usage(account_id,instance_id,billing_month,traffic_bytes,last_sample_ms,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(account_id,instance_id,billing_month) DO UPDATE SET traffic_bytes=instance_traffic_usage.traffic_bytes+excluded.traffic_bytes,last_sample_ms=MAX(instance_traffic_usage.last_sample_ms,excluded.last_sample_ms),updated_at=excluded.updated_at`, accountID, instanceID, month, deltaBytes, lastSampleMS, now)
+	if err != nil {
+		return TrafficSample{}, err
+	}
+	return s.InstanceTrafficUsage(accountID, instanceID, month)
+}
+
+// SetInstanceTraffic stores an absolute monthly CMS total. This lets the
+// monitor recover after an instance was stopped or the process was offline
+// without losing the traffic accumulated between two polling windows.
+func (s *Store) SetInstanceTraffic(accountID int64, instanceID, month string, trafficBytes float64, lastSampleMS int64) (TrafficSample, error) {
+	now := time.Now().Unix()
+	_, err := s.DB.Exec(`INSERT INTO instance_traffic_usage(account_id,instance_id,billing_month,traffic_bytes,last_sample_ms,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(account_id,instance_id,billing_month) DO UPDATE SET traffic_bytes=excluded.traffic_bytes,last_sample_ms=MAX(instance_traffic_usage.last_sample_ms,excluded.last_sample_ms),updated_at=excluded.updated_at`, accountID, instanceID, month, trafficBytes, lastSampleMS, now)
 	if err != nil {
 		return TrafficSample{}, err
 	}

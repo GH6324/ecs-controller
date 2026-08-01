@@ -36,17 +36,18 @@ func (w *Worker) syncDDNSAccount(ctx context.Context, account app.Account) {
 	w.Store.AddLog("info", fmt.Sprintf("DDNS 已同步 [%s] %s -> %s", accountLabel(account), name, address))
 }
 
-func (w *Worker) deleteDDNSAccount(ctx context.Context, account app.Account, before []app.Account) {
+func (w *Worker) deleteDDNSAccount(ctx context.Context, account app.Account, before []app.Account) error {
 	if !w.ddnsEnabled() || account.InstanceID == "" {
-		return
+		return nil
 	}
 	name := w.ddnsRecordName(account, before)
 	token, _ := w.Store.OpenSecret(w.Store.GetSetting("ddns_cf_token", ""))
 	if err := notify.CloudflareDeleteRecord(ctx, token, w.Store.GetSetting("ddns_cf_zone_id", ""), w.Store.GetSetting("ddns_domain", ""), name); err != nil {
 		w.Store.AddLog("warning", "Cloudflare DDNS 清理失败: "+err.Error())
-		return
+		return err
 	}
 	w.Store.AddLog("info", "DDNS 已删除: "+name)
+	return nil
 }
 
 func (w *Worker) syncAllDDNS(ctx context.Context) {

@@ -742,6 +742,11 @@
             color: var(--status-transition-text, #d97706);
         }
 
+        .status-error {
+            background: #fef2f2;
+            color: #b91c1c;
+        }
+
         .status-unknown {
             background: var(--status-unknown-bg, #f3f4f6);
             color: var(--status-unknown-text, #6b7280);
@@ -3317,6 +3322,7 @@
                                         { value: 'Starting', label: '启动中' },
                                         { value: 'Stopping', label: '停止中' },
                                         { value: 'Releasing', label: '释放中' },
+                                        { value: 'ReleaseFailed', label: '释放失败' },
                                         { value: 'Unknown', label: '未知' }
                                     ]"
                                 />
@@ -5432,7 +5438,11 @@
                     }
                     fetchingAllInstances.value = true;
                     try {
-                        const res = await fetch(`index.php?action=get_all_instances&sync=${sync ? '1' : '0'}`);
+                        const endpoint = sync ? 'index.php?action=sync_instances' : 'index.php?action=get_all_instances';
+                        const res = await fetch(endpoint, sync ? {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        } : undefined);
                         const data = await res.json();
                         if (data.error) {
                             if (!options.silent) {
@@ -5469,7 +5479,10 @@
                 const syncCloudInstances = async () => {
                     syncingInstances.value = true;
                     try {
-                        const res = await fetch('index.php?action=get_all_instances&sync=1');
+                        const res = await fetch('index.php?action=sync_instances', {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        });
                         const data = await res.json();
                         if (data.error) {
                             openAlert(data.error, 'error');
@@ -6377,6 +6390,7 @@
                     if (status === 'Running') return 'status-running';
                     if (status === 'Stopped' || status === 'Released') return 'status-stopped';
                     if (status === 'Starting' || status === 'Stopping' || status === 'Pending' || status === 'Releasing') return 'status-transition';
+                    if (status === 'ReleaseFailed') return 'status-error';
                     return 'status-unknown';
                 };
 
@@ -6385,6 +6399,7 @@
                     Stopped: '已停止',
                     Released: '已释放',
                     Releasing: '释放中',
+                    ReleaseFailed: '释放失败，可重试',
                     Starting: '启动中',
                     Stopping: '停止中',
                     Pending: '创建中',

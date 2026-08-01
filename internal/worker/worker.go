@@ -35,6 +35,9 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 			w.Store.SetLastRun()
 			now := time.Now()
+			if err := w.Store.ResetMonthlyTraffic(); err != nil {
+				w.Store.AddLog("warning", "月度流量状态重置失败: "+err.Error())
+			}
 			maintenanceDay := now.Format("2006-01-02")
 			if w.Store.GetSetting("maintenance_day", "") != maintenanceDay {
 				if err := w.Store.PruneMaintenance(now); err != nil {
@@ -121,14 +124,25 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 					if cloud.IsCredentialError(trafficErr) {
 						reason = "credential_invalid"
 					}
-					_ = w.Store.UpdateAccountStatus(account.ID, account.TrafficUsed, account.InstanceStatus, now.Unix(), map[string]any{"health_status": "ok", "traffic_api_status": "error", "traffic_api_message": trafficErr.Error(), "protection_suspended": true, "protection_suspend_reason": reason})
+					account.TrafficAPIStatus, account.TrafficAPIMessage = "error", trafficErr.Error()
+					account.ProtectionSuspended, account.ProtectionSuspendReason = true, reason
+					account.UpdatedAt, account.TrafficBillingMonth = now.Unix(), now.Format("2006-01")
+					// CMS may be delayed or temporarily unavailable. A failed CMS
+					// request must not skip the independent CDT safety check.
+					if available := w.applyTrafficProtection(ctx, client, &account, now, threshold, thresholdAction, shutdownMode, account.TrafficUsed, false, keepAlive, monthlyAutoStart); available {
+						account.ProtectionSuspended, account.ProtectionSuspendReason = false, ""
+					}
 					if reason == "credential_invalid" && account.ProtectionNotifiedAt == 0 {
 						w.dispatchEvent(ctx, notify.Event{Title: "阿里云凭据异常", Summary: "已暂停自动停机保护", AccountID: accountLabel(account), Text: fmt.Sprintf("【ECS Controller】阿里云凭据异常\n账号/实例: %s\n实例 ID: %s\n错误: %s\n系统已暂停自动停机保护，请更新 AK 后恢复。", accountLabel(account), account.InstanceID, trafficErr.Error()), Fields: map[string]string{"instance_id": account.InstanceID, "reason": "credential_invalid"}})
-						_ = w.Store.UpdateAccountStatus(account.ID, account.TrafficUsed, account.InstanceStatus, now.Unix(), map[string]any{"protection_suspend_notified_at": now.Unix()})
+						account.ProtectionNotifiedAt = now.Unix()
+					}
+					if err := w.Store.UpsertAccount(account); err != nil {
+						w.Store.AddLog("error", "保存流量保护状态失败: "+err.Error())
 					}
 					continue
 				}
 				account.TrafficUsed = traffic
+				account.TrafficBillingMonth = now.Format("2006-01")
 				account.TrafficAPIStatus, account.TrafficAPIMessage, account.ProtectionSuspended, account.ProtectionSuspendReason = trafficStatus, trafficMessage, false, ""
 				if account.ProtectionNotifiedAt != 0 {
 					account.ProtectionNotifiedAt = 0
@@ -161,54 +175,7 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 						}
 					}
 				}
-				protectionTraffic, protectionSource := w.protectionTraffic(ctx, client, account, traffic)
-				usagePercent := 0.0
-				if account.MaxTraffic > 0 {
-					usagePercent = protectionTraffic / account.MaxTraffic * 100
-				}
-				requiresProtection := account.MaxTraffic > 0 && usagePercent >= threshold
-				protectionAction := ""
-				if requiresProtection && thresholdAction == "stop_and_notify" && account.InstanceStatus == "Running" {
-					if stopErr := client.StopInstance(ctx, account.RegionID, account.InstanceID, shutdownMode); stopErr != nil {
-						w.Store.AddLog("error", "流量阈值停机失败: "+stopErr.Error())
-					} else {
-						account.InstanceStatus = "Stopping"
-						_ = w.Store.SetGroupScheduleBlocked(account.GroupKey, true)
-						account.ScheduleBlockedByTraffic = true
-						w.Store.AddLog("warning", fmt.Sprintf("实例已达到流量保护阈值，已发起停机: %s (%.2f%%, 来源: %s)", account.InstanceID, usagePercent, protectionSource))
-						w.dispatchEvent(ctx, statusEvent(account, oldStatus, "Stopping", fmt.Sprintf("%s 流量达到保护阈值，已提交停机。", protectionSource)))
-						protectionAction = fmt.Sprintf("已达到阈值，已提交停机（来源：%s）", protectionSource)
-					}
-				}
-				if requiresProtection && thresholdAction == "notify_only" {
-					protectionAction = fmt.Sprintf("仅发送告警（来源：%s）", protectionSource)
-				}
-				if protectionAction != "" && (account.ProtectionNotifiedAt == 0 || now.Unix()-account.ProtectionNotifiedAt >= 6*60*60) {
-					w.dispatchEvent(ctx, trafficEvent(account, protectionTraffic, usagePercent, threshold, protectionAction))
-					account.ProtectionNotifiedAt = now.Unix()
-				}
-				if !requiresProtection && !account.ScheduleBlockedByTraffic {
-					w.runSchedule(ctx, client, &account, now, shutdownMode)
-					if monthlyAutoStart && now.Day() == 1 && account.InstanceStatus == "Stopped" && !account.AutoStartBlocked && !scheduledStopBlocksAutomaticStart(account) && !sameMonth(account.LastKeepAliveAt, now) {
-						if err := client.StartInstance(ctx, account.RegionID, account.InstanceID); err == nil {
-							account.InstanceStatus = "Starting"
-							account.LastKeepAliveAt = now.Unix()
-							w.dispatchEvent(ctx, statusEvent(account, "Stopped", "Starting", "每月 1 号自动开机。"))
-						} else {
-							w.Store.AddLog("error", "月初自动开机失败: "+err.Error())
-						}
-					}
-					if keepAlive && account.InstanceStatus == "Stopped" && canKeepAlive(account, requiresProtection) {
-						if err := client.StartInstance(ctx, account.RegionID, account.InstanceID); err == nil {
-							account.InstanceStatus = "Starting"
-							account.LastKeepAliveAt = now.Unix()
-							w.Store.AddLog("info", "保活已启动实例: "+account.InstanceID)
-							w.dispatchEvent(ctx, statusEvent(account, "Stopped", "Starting", "检测到实例停机，保活已提交开机。"))
-						} else {
-							w.Store.AddLog("error", "保活启动失败: "+err.Error())
-						}
-					}
-				}
+				w.applyTrafficProtection(ctx, client, &account, now, threshold, thresholdAction, shutdownMode, traffic, true, keepAlive, monthlyAutoStart)
 				if err := w.Store.UpsertAccount(account); err != nil {
 					w.Store.AddLog("error", "保存监控状态失败: "+err.Error())
 				}
@@ -223,14 +190,26 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 }
 
 func (w *Worker) protectionTraffic(ctx context.Context, client cloud.Client, account app.Account, cmsTraffic float64) (float64, string) {
+	traffic, source, _ := w.protectionTrafficStatus(ctx, client, account, cmsTraffic, true)
+	return traffic, source
+}
+
+// protectionTrafficStatus combines the independent CMS and CDT signals. CMS
+// remains the value shown on an instance card, while the larger available
+// value is used for the safety threshold. If both APIs are unavailable,
+// automation must pause instead of trusting an old value.
+func (w *Worker) protectionTrafficStatus(ctx context.Context, client cloud.Client, account app.Account, cmsTraffic float64, cmsAvailable bool) (float64, string, bool) {
 	cycle := time.Now().Format("2006-01")
 	if account.ID > 0 {
 		if cached, ok := w.Store.GetBillingCache(account.ID, "cdt_protection", cycle, 5*time.Minute); ok {
 			cdtTraffic := trafficFloat(cached["traffic"])
-			if cdtTraffic >= cmsTraffic {
-				return cdtTraffic, "CDT"
+			if !cmsAvailable {
+				return cdtTraffic, "CDT", true
 			}
-			return cmsTraffic, "CMS"
+			if cdtTraffic >= cmsTraffic {
+				return cdtTraffic, "CDT", true
+			}
+			return cmsTraffic, "CMS", true
 		}
 	}
 	cdtTraffic, err := client.GetTraffic(ctx, account.RegionID)
@@ -238,11 +217,15 @@ func (w *Worker) protectionTraffic(ctx context.Context, client cloud.Client, acc
 		if account.ID > 0 {
 			_ = w.Store.SetBillingCache(account.ID, "cdt_protection", cycle, map[string]any{"traffic": cdtTraffic})
 		}
-		if cdtTraffic >= cmsTraffic {
-			return cdtTraffic, "CDT"
+		if !cmsAvailable || cdtTraffic >= cmsTraffic {
+			return cdtTraffic, "CDT", true
 		}
+		return cmsTraffic, "CMS", true
 	}
-	return cmsTraffic, "CMS"
+	if cmsAvailable {
+		return cmsTraffic, "CMS", true
+	}
+	return 0, "", false
 }
 
 func trafficFloat(value any) float64 {
@@ -267,7 +250,18 @@ func trafficFloat(value any) float64 {
 }
 
 func (w *Worker) runCachedAutomation(ctx context.Context, client cloud.Client, account *app.Account, now time.Time, threshold float64, thresholdAction, shutdownMode string, keepAlive, monthlyAutoStart bool) {
-	protectionTraffic, protectionSource := w.protectionTraffic(ctx, client, *account, account.TrafficUsed)
+	protectionTraffic, protectionSource, available := w.protectionTrafficStatus(ctx, client, *account, account.TrafficUsed, account.TrafficAPIStatus != "error" && !account.ProtectionSuspended)
+	if !available {
+		account.ProtectionSuspended = true
+		if account.ProtectionSuspendReason == "" {
+			account.ProtectionSuspendReason = "traffic_api_error"
+		}
+		if err := w.Store.UpsertAccount(*account); err != nil {
+			w.Store.AddLog("error", "保存流量保护暂停状态失败: "+err.Error())
+		}
+		return
+	}
+	account.ProtectionSuspended, account.ProtectionSuspendReason = false, ""
 	usagePercent := 0.0
 	if account.MaxTraffic > 0 {
 		usagePercent = protectionTraffic / account.MaxTraffic * 100
@@ -313,6 +307,69 @@ func (w *Worker) runCachedAutomation(ctx context.Context, client cloud.Client, a
 	}
 }
 
+// applyTrafficProtection runs the same threshold and auto-start decisions
+// after a fresh CMS sample or after CMS failed and CDT supplied the fallback.
+func (w *Worker) applyTrafficProtection(ctx context.Context, client cloud.Client, account *app.Account, now time.Time, threshold float64, thresholdAction, shutdownMode string, cmsTraffic float64, cmsAvailable, keepAlive, monthlyAutoStart bool) bool {
+	protectionTraffic, protectionSource, available := w.protectionTrafficStatus(ctx, client, *account, cmsTraffic, cmsAvailable)
+	if !available {
+		account.ProtectionSuspended = true
+		if account.ProtectionSuspendReason == "" {
+			account.ProtectionSuspendReason = "traffic_api_error"
+		}
+		return false
+	}
+	account.ProtectionSuspended, account.ProtectionSuspendReason = false, ""
+	usagePercent := 0.0
+	if account.MaxTraffic > 0 {
+		usagePercent = protectionTraffic / account.MaxTraffic * 100
+	}
+	requiresProtection := account.MaxTraffic > 0 && usagePercent >= threshold
+	protectionAction := ""
+	if requiresProtection && thresholdAction == "stop_and_notify" && account.InstanceStatus == "Running" {
+		if err := client.StopInstance(ctx, account.RegionID, account.InstanceID, shutdownMode); err != nil {
+			w.Store.AddLog("error", "流量阈值停机失败: "+err.Error())
+		} else {
+			old := account.InstanceStatus
+			account.InstanceStatus = "Stopping"
+			account.ScheduleBlockedByTraffic = true
+			_ = w.Store.SetGroupScheduleBlocked(account.GroupKey, true)
+			w.Store.AddLog("warning", fmt.Sprintf("实例已达到流量保护阈值，已发起停机: %s (%.2f%%, 来源: %s)", account.InstanceID, usagePercent, protectionSource))
+			w.dispatchEvent(ctx, statusEvent(*account, old, "Stopping", fmt.Sprintf("%s 流量达到保护阈值，已提交停机。", protectionSource)))
+			protectionAction = fmt.Sprintf("已达到阈值，已提交停机（来源：%s）", protectionSource)
+		}
+	}
+	if requiresProtection && thresholdAction == "notify_only" {
+		protectionAction = fmt.Sprintf("仅发送告警（来源：%s）", protectionSource)
+	}
+	if protectionAction != "" && (account.ProtectionNotifiedAt == 0 || now.Unix()-account.ProtectionNotifiedAt >= 6*60*60) {
+		w.dispatchEvent(ctx, trafficEvent(*account, protectionTraffic, usagePercent, threshold, protectionAction))
+		account.ProtectionNotifiedAt = now.Unix()
+	}
+	if cmsAvailable && !requiresProtection && !account.ScheduleBlockedByTraffic {
+		w.runSchedule(ctx, client, account, now, shutdownMode)
+		if monthlyAutoStart && now.Day() == 1 && account.InstanceStatus == "Stopped" && !account.AutoStartBlocked && !scheduledStopBlocksAutomaticStart(*account) && !sameMonth(account.LastKeepAliveAt, now) {
+			if err := client.StartInstance(ctx, account.RegionID, account.InstanceID); err == nil {
+				account.InstanceStatus = "Starting"
+				account.LastKeepAliveAt = now.Unix()
+				w.dispatchEvent(ctx, statusEvent(*account, "Stopped", "Starting", "每月 1 号自动开机。"))
+			} else {
+				w.Store.AddLog("error", "月初自动开机失败: "+err.Error())
+			}
+		}
+		if keepAlive && account.InstanceStatus == "Stopped" && canKeepAlive(*account, requiresProtection) {
+			if err := client.StartInstance(ctx, account.RegionID, account.InstanceID); err == nil {
+				account.InstanceStatus = "Starting"
+				account.LastKeepAliveAt = now.Unix()
+				w.Store.AddLog("info", "保活已启动实例: "+account.InstanceID)
+				w.dispatchEvent(ctx, statusEvent(*account, "Stopped", "Starting", "检测到实例停机，保活已提交开机。"))
+			} else {
+				w.Store.AddLog("error", "保活启动失败: "+err.Error())
+			}
+		}
+	}
+	return true
+}
+
 func (w *Worker) refreshTraffic(ctx context.Context, client cloud.Client, account app.Account, now time.Time) (float64, string, string, error) {
 	month := now.Format("2006-01")
 	sample, err := w.Store.InstanceTrafficUsage(account.ID, account.InstanceID, month)
@@ -320,6 +377,16 @@ func (w *Worker) refreshTraffic(ctx context.Context, client cloud.Client, accoun
 		return 0, "error", err.Error(), err
 	}
 	endMS := now.UnixMilli()
+	if monthlyClient, ok := client.(cloud.MonthlyTrafficClient); ok {
+		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).UnixMilli()
+		if monthlyBytes, points, monthlyErr := monthlyClient.GetInstanceMonthlyTraffic(ctx, account.RegionID, account.InstanceID, account.PublicIP, monthStart, endMS); monthlyErr == nil && points > 0 {
+			sample, err = w.Store.SetInstanceTraffic(account.ID, account.InstanceID, month, monthlyBytes, endMS)
+			if err != nil {
+				return 0, "error", err.Error(), err
+			}
+			return sample.TrafficBytes / (1024 * 1024 * 1024), "ok", "", nil
+		}
+	}
 	startMS := sample.LastSampleMS
 	if startMS <= 0 || startMS >= endMS {
 		startMS = endMS - int64(10*time.Minute/time.Millisecond)
@@ -445,6 +512,11 @@ func (w *Worker) Run(ctx context.Context) {
 			if job.Attempts < maxAttempts {
 				_ = w.Store.RetryJob(job.JobID, retryDelay(job.Attempts), err.Error())
 			} else {
+				if job.Kind == "delete_instance" {
+					if id, parseErr := strconv.ParseInt(job.EntityKey, 10, 64); parseErr == nil {
+						_ = w.Store.SetInstanceStatus(id, "ReleaseFailed")
+					}
+				}
 				_ = w.Store.FailJob(job.JobID, err.Error())
 			}
 			continue
@@ -480,8 +552,7 @@ func (w *Worker) deleteDDNSJob(ctx context.Context, job *store.Job) error {
 	if len(payload.Before) == 0 {
 		payload.Before = []app.Account{payload.Account}
 	}
-	w.deleteDDNSAccount(ctx, payload.Account, payload.Before)
-	return nil
+	return w.deleteDDNSAccount(ctx, payload.Account, payload.Before)
 }
 
 func (w *Worker) deleteInstance(ctx context.Context, job *store.Job) error {
@@ -540,6 +611,11 @@ func (w *Worker) deleteInstance(ctx context.Context, job *store.Job) error {
 			return err
 		}
 	}
+	// Keep the local row in Releasing until the external DNS record is also
+	// gone, so a transient Cloudflare failure remains retryable.
+	if err := w.deleteDDNSAccount(ctx, *account, beforeAccounts); err != nil {
+		return err
+	}
 	if err := w.Store.PhysicallyDelete(id); err != nil {
 		return err
 	}
@@ -547,7 +623,6 @@ func (w *Worker) deleteInstance(ctx context.Context, job *store.Job) error {
 	if len(before) == 0 {
 		before = []app.Account{*account}
 	}
-	w.deleteDDNSAccount(ctx, *account, before)
 	w.syncAllDDNS(ctx)
 	w.dispatchEvent(ctx, notify.Event{Title: "实例已释放", Summary: "实例已从云端释放，本地记录和 DDNS 已清理。", AccountID: accountLabel(*account), Text: fmt.Sprintf("【ECS Controller】实例已释放\n实例: %s\n实例 ID: %s\n区域: %s\n公网 IP: %s\n时间: %s", accountLabel(*account), account.InstanceID, account.RegionID, account.PublicIP, time.Now().Format("2006-01-02 15:04:05")), Fields: map[string]string{"instance_id": account.InstanceID, "region": account.RegionID, "public_ip": account.PublicIP}})
 	w.Store.AddLog("info", "实例已异步释放: "+account.InstanceID)
@@ -558,7 +633,7 @@ func (w *Worker) createECS(ctx context.Context, job *store.Job) (err error) {
 	if w.Cloud == nil && w.CloudFactory == nil {
 		return fmt.Errorf("cloud client is not configured")
 	}
-	task, err := w.Store.GetTask(job.EntityKey)
+	task, err := w.Store.GetTaskForWorker(job.EntityKey)
 	if err != nil {
 		return err
 	}
@@ -611,17 +686,19 @@ func (w *Worker) createECS(ctx context.Context, job *store.Job) (err error) {
 		if err == nil {
 			return
 		}
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		// Every resource created by this task is tracked locally before moving on
 		// to the next step, so retries can compensate known partial state.
 		if allocationID != "" {
-			_ = client.UnassociateEIP(context.Background(), task.RegionID, allocationID)
-			_ = client.ReleaseEIP(context.Background(), task.RegionID, allocationID)
+			_ = client.UnassociateEIP(rollbackCtx, task.RegionID, allocationID)
+			_ = client.ReleaseEIP(rollbackCtx, task.RegionID, allocationID)
 		}
 		if createdInstance != "" {
-			_ = client.DeleteInstance(context.Background(), task.RegionID, createdInstance)
+			_ = client.DeleteInstance(rollbackCtx, task.RegionID, createdInstance)
 		}
 		if networkCreated {
-			_ = client.CleanupNetwork(context.Background(), task.RegionID, createdVPC, createdVSwitch, createdSecurityGroup)
+			_ = client.CleanupNetwork(rollbackCtx, task.RegionID, createdVPC, createdVSwitch, createdSecurityGroup)
 		}
 		_ = w.Store.UpdateTask(task.TaskID, map[string]any{"status": "failed", "step": "已回滚云资源", "error_message": err.Error(), "instance_id": createdInstance, "eip_allocation_id": allocationID})
 	}()

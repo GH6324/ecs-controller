@@ -40,7 +40,10 @@ func (c *RPCClient) Call(ctx context.Context, action string, params map[string]s
 			return result, nil
 		}
 		lastErr = err
-		if !retryableRPCError(err) || attempt == 2 {
+		// A timeout after a mutating RPC is ambiguous: repeating it can create
+		// duplicate VPCs, EIPs, security groups, or ECS instances. Only retry
+		// actions whose repeated execution is read-only (or explicitly safe).
+		if !rpcActionRetryable(action) || !retryableRPCError(err) || attempt == 2 {
 			break
 		}
 		delay := time.Duration(1<<attempt) * time.Second
@@ -53,6 +56,16 @@ func (c *RPCClient) Call(ctx context.Context, action string, params map[string]s
 		}
 	}
 	return nil, lastErr
+}
+
+func rpcActionRetryable(action string) bool {
+	action = strings.ToLower(strings.TrimSpace(action))
+	for _, prefix := range []string{"describe", "list", "query", "get", "check"} {
+		if strings.HasPrefix(action, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *RPCClient) callOnce(ctx context.Context, action string, params map[string]string) (map[string]any, error) {

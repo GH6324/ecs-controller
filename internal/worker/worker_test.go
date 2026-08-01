@@ -18,6 +18,7 @@ type fakeCloud struct {
 	deleted, unassociated, released, cleaned int
 	describeStatus                           string
 	cdtTraffic                               float64
+	cdtErr                                   error
 	cdtCalls                                 int
 	outboundErr                              error
 	outboundBytes                            float64
@@ -77,7 +78,7 @@ func (f *fakeCloud) CleanupNetwork(context.Context, string, string, string, stri
 }
 func (f *fakeCloud) GetTraffic(context.Context, string) (float64, error) {
 	f.cdtCalls++
-	return f.cdtTraffic, nil
+	return f.cdtTraffic, f.cdtErr
 }
 func (f *fakeCloud) GetOutboundTrafficDelta(context.Context, string, string, string, int64, int64) (float64, int64, int, string, error) {
 	return f.outboundBytes, f.outboundLastMS, f.outboundPoints, "InternetOutRate", f.outboundErr
@@ -202,6 +203,40 @@ func TestRefreshTrafficDoesNotFallbackToCDT(t *testing.T) {
 	}
 	if fake.cdtCalls != 0 {
 		t.Fatalf("CMS failure unexpectedly queried CDT %d times", fake.cdtCalls)
+	}
+}
+
+func TestProtectionUsesCDTWhenCMSFails(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	fake := &fakeCloud{cdtTraffic: 120}
+	w := &Worker{Store: s}
+	account := &app.Account{ID: 1, GroupKey: "g", RegionID: "cn-hongkong", InstanceID: "i-1", InstanceStatus: "Running", MaxTraffic: 100}
+	if !w.applyTrafficProtection(context.Background(), fake, account, time.Now(), 95, "stop_and_notify", "KeepCharging", 0, false, true, false) {
+		t.Fatal("CDT fallback was treated as unavailable")
+	}
+	if fake.stopped != 1 || account.InstanceStatus != "Stopping" {
+		t.Fatalf("CDT threshold did not stop the instance: calls=%d account=%+v", fake.stopped, *account)
+	}
+}
+
+func TestProtectionPausesWhenBothTrafficAPIsFail(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	fake := &fakeCloud{cdtErr: errors.New("CDT unavailable")}
+	w := &Worker{Store: s}
+	account := &app.Account{ID: 1, GroupKey: "g", RegionID: "cn-hongkong", InstanceID: "i-1", InstanceStatus: "Stopped", MaxTraffic: 100}
+	if w.applyTrafficProtection(context.Background(), fake, account, time.Now(), 95, "stop_and_notify", "KeepCharging", 99, false, true, true) {
+		t.Fatal("protection should pause when both traffic APIs fail")
+	}
+	if fake.started != 0 || fake.stopped != 0 || !account.ProtectionSuspended {
+		t.Fatalf("unsafe automation occurred: calls=%+v account=%+v", fake, *account)
 	}
 }
 

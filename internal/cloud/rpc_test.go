@@ -56,3 +56,20 @@ func TestRPCTreatsSuccessCodeAsSuccess(t *testing.T) {
 		t.Fatalf("successful BSS response was treated as an error: %v", err)
 	}
 }
+
+func TestRPCDoesNotRetryMutatingActions(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"Code":"InternalError","Message":"temporary"}`))
+	}))
+	defer server.Close()
+	client := &RPCClient{Endpoint: server.URL, Version: "2014-05-26", AccessKey: "AKID", Secret: "SECRET", HTTPClient: server.Client()}
+	if _, err := client.Call(context.Background(), "RunInstances", nil); err == nil {
+		t.Fatal("mutating RPC unexpectedly succeeded")
+	}
+	if calls != 1 {
+		t.Fatalf("mutating RPC was retried %d times", calls)
+	}
+}

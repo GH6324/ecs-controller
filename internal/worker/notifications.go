@@ -12,7 +12,17 @@ import (
 func (w *Worker) dispatchEvent(ctx context.Context, event notify.Event) error {
 	settings := w.Store.Settings()
 	cfg := notify.ConfigFromSettings(settings, w.Store.OpenSecret)
-	if err := (notify.Dispatcher{Config: cfg}).Dispatch(ctx, event); err != nil {
+	notifyCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- (notify.Dispatcher{Config: cfg}).Dispatch(notifyCtx, event) }()
+	var err error
+	select {
+	case err = <-done:
+	case <-notifyCtx.Done():
+		err = notifyCtx.Err()
+	}
+	if err != nil {
 		w.Store.AddLog("warning", "通知发送失败: "+err.Error())
 		return err
 	}

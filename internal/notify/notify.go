@@ -180,7 +180,7 @@ func Webhook(ctx context.Context, endpoint, method, contentType string, headers 
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		return err
 	}

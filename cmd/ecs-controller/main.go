@@ -87,6 +87,7 @@ func numberEnv(key string, fallback int) int {
 	}
 	return n
 }
+
 func fmtSscanf(s, format string) (int, error) {
 	var n int
 	_, err := fmt.Sscanf(s, format, &n)

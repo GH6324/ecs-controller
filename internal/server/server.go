@@ -81,6 +81,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.login(w, r)
 	case "check_login":
 		s.checkLogin(w, r)
+	case "passkey_status":
+		s.passkeyStatus(w)
+	case "passkey_login_start":
+		s.passkeyLoginStart(w, r)
+	case "passkey_login_finish":
+		s.passkeyLoginFinish(w, r)
 	case "brand_logo":
 		s.brandLogo(w)
 	default:
@@ -105,7 +111,8 @@ func (s *Server) serveTemplate(w http.ResponseWriter) {
 	_, _ = w.Write(data)
 }
 func (s *Server) checkInit(w http.ResponseWriter) {
-	s.json(w, 200, map[string]any{"initialized": s.Store.IsInitialized(), "brand": map[string]any{"logo_url": s.Store.GetSetting("app_logo_url", "")}})
+	passkeyCount := s.Store.PasskeyCount()
+	s.json(w, 200, map[string]any{"initialized": s.Store.IsInitialized(), "password_login_enabled": s.passwordLoginEnabled(), "passkey_enabled": passkeyCount > 0, "passkey_count": passkeyCount, "brand": map[string]any{"logo_url": s.Store.GetSetting("app_logo_url", "")}})
 }
 
 func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +153,10 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	if !s.passwordLoginEnabled() {
+		s.error(w, http.StatusForbidden, "密码登录已关闭，请使用 Passkey 登录")
+		return
+	}
 	ip := remoteIP(r)
 	if s.Store.RecentLoginFailures(ip, time.Minute) >= 10 {
 		s.error(w, 429, "登录尝试过于频繁")
@@ -200,12 +211,18 @@ func (s *Server) authenticatedAction(w http.ResponseWriter, r *http.Request, act
 		s.uploadLogo(w, r)
 		return
 	}
+	if action == "passkey_register_finish" {
+		s.passkeyRegisterFinish(w, r)
+		return
+	}
 	data, _ := readJSON(r)
 	switch action {
 	case "get_status":
 		s.status(w)
 	case "get_config":
 		s.config(w)
+	case "passkey_register_start":
+		s.passkeyRegisterStart(w, r)
 	case "check_update":
 		s.checkForUpdate(w, r)
 	case "get_update_status":
@@ -339,7 +356,7 @@ func (s *Server) config(w http.ResponseWriter) {
 			m.used = m.fallbackUsed
 		}
 	}
-	result := map[string]any{"admin_password": "********", "admin_password_set": s.Store.IsInitialized(), "traffic_threshold": numberString(settings["traffic_threshold"], 95), "shutdown_mode": fallback(settings["shutdown_mode"], "KeepCharging"), "threshold_action": fallback(settings["threshold_action"], "stop_and_notify"), "keep_alive": settings["keep_alive"] == "1", "monthly_auto_start": settings["monthly_auto_start"] == "1", "api_interval": numberString(settings["api_interval"], 600), "enable_billing": settings["enable_billing"] == "1", "AppBrand": map[string]any{"logo_url": settings["app_logo_url"]}, "Notification": notificationSettings(settings), "Ddns": map[string]any{"enabled": settings["ddns_enabled"] == "1", "provider": fallback(settings["ddns_provider"], "cloudflare"), "domain": settings["ddns_domain"], "cloudflare": map[string]any{"zone_id": settings["ddns_cf_zone_id"], "token": masked(settings["ddns_cf_token"]), "proxied": settings["ddns_cf_proxied"] == "1"}}, "Accounts": []any{}}
+	result := map[string]any{"admin_password": "********", "admin_password_set": s.Store.IsInitialized(), "password_login_enabled": settingBool(settings["password_login_enabled"], true), "passkey_count": s.Store.PasskeyCount(), "traffic_threshold": numberString(settings["traffic_threshold"], 95), "shutdown_mode": fallback(settings["shutdown_mode"], "KeepCharging"), "threshold_action": fallback(settings["threshold_action"], "stop_and_notify"), "keep_alive": settings["keep_alive"] == "1", "monthly_auto_start": settings["monthly_auto_start"] == "1", "api_interval": numberString(settings["api_interval"], 600), "enable_billing": settings["enable_billing"] == "1", "AppBrand": map[string]any{"logo_url": settings["app_logo_url"]}, "Notification": notificationSettings(settings), "Ddns": map[string]any{"enabled": settings["ddns_enabled"] == "1", "provider": fallback(settings["ddns_provider"], "cloudflare"), "domain": settings["ddns_domain"], "cloudflare": map[string]any{"zone_id": settings["ddns_cf_zone_id"], "token": masked(settings["ddns_cf_token"]), "proxied": settings["ddns_cf_proxied"] == "1"}}, "Accounts": []any{}}
 	items := result["Accounts"].([]any)
 	for _, g := range groups {
 		m := metrics[g.GroupKey]
@@ -461,12 +478,19 @@ func (s *Server) saveConfig(data map[string]any) error {
 	if interval < 30 || interval > 86400 {
 		return fmt.Errorf("API 间隔必须在 30 到 86400 秒之间")
 	}
+	passwordLoginEnabled := settingBool(s.Store.GetSetting("password_login_enabled", ""), true)
+	if _, exists := data["password_login_enabled"]; exists {
+		passwordLoginEnabled = truthy(data["password_login_enabled"])
+	}
+	if !passwordLoginEnabled && s.Store.PasskeyCount() == 0 {
+		return fmt.Errorf("关闭密码登录前请先设置至少一个 Passkey")
+	}
 	if password := stringValue(data["admin_password"]); password != "" && password != "********" {
 		if err := s.Store.SetAdminPassword(password); err != nil {
 			return err
 		}
 	}
-	for key, value := range map[string]any{"traffic_threshold": threshold, "shutdown_mode": fallback(stringValue(data["shutdown_mode"]), "KeepCharging"), "threshold_action": fallback(stringValue(data["threshold_action"]), "stop_and_notify"), "keep_alive": bool01(data["keep_alive"]), "monthly_auto_start": bool01(data["monthly_auto_start"]), "api_interval": interval, "enable_billing": bool01(data["enable_billing"])} {
+	for key, value := range map[string]any{"traffic_threshold": threshold, "shutdown_mode": fallback(stringValue(data["shutdown_mode"]), "KeepCharging"), "threshold_action": fallback(stringValue(data["threshold_action"]), "stop_and_notify"), "keep_alive": bool01(data["keep_alive"]), "monthly_auto_start": bool01(data["monthly_auto_start"]), "api_interval": interval, "enable_billing": bool01(data["enable_billing"]), "password_login_enabled": bool01(passwordLoginEnabled)} {
 		if err := s.Store.SetSetting(key, fmt.Sprint(value)); err != nil {
 			return err
 		}
@@ -1459,6 +1483,9 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	s.json(w, 200, map[string]any{"success": true})
 }
 func (s *Server) authenticated(r *http.Request) bool { _, ok := s.session(r); return ok }
+func (s *Server) passwordLoginEnabled() bool {
+	return settingBool(s.Store.GetSetting("password_login_enabled", ""), true)
+}
 func (s *Server) session(r *http.Request) (string, bool) {
 	c, err := r.Cookie("ecs_session")
 	if err != nil {
@@ -1486,7 +1513,7 @@ func (s *Server) csrfOK(w http.ResponseWriter, r *http.Request) bool {
 }
 func (s *Server) mutating(a string) bool {
 	switch a {
-	case "save_config", "upload_logo", "clear_logs", "logout", "create_ecs", "control_instance", "delete_instance", "replace_instance_ip", "refresh_account", "sync_account_group", "sync_instances", "restore_schedule_block", "send_test_email", "send_test_telegram", "send_test_webhook", "start_update":
+	case "save_config", "upload_logo", "clear_logs", "logout", "create_ecs", "control_instance", "delete_instance", "replace_instance_ip", "refresh_account", "sync_account_group", "sync_instances", "restore_schedule_block", "send_test_email", "send_test_telegram", "send_test_webhook", "start_update", "passkey_register_start", "passkey_register_finish":
 		return true
 	}
 	return false

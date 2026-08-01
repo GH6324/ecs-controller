@@ -1644,6 +1644,27 @@
             margin-top: 16px;
         }
 
+        .passkey-login-option {
+            margin-top: 18px;
+        }
+
+        .passkey-login-option__rule {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 0.72rem;
+            text-align: center;
+        }
+
+        .passkey-login-option__rule::before,
+        .passkey-login-option__rule::after {
+            content: '';
+            height: 1px;
+            flex: 1;
+            background: var(--line);
+        }
+
         .auth-brand {
             display: flex;
             align-items: center;
@@ -3447,16 +3468,29 @@
                             <h2 class="auth-brand__title">管理员登录</h2>
                         </div>
                     </div>
-                    <p class="auth-brand__lead">登录后查看实例状态、流量用量、定时策略和系统日志。</p>
-                    <input
-                        v-model="passwordInput"
-                        @keyup.enter="performLogin"
-                        type="password"
-                        class="glass-input mt-6"
-                        placeholder="请输入管理员密码"
-                    >
-                    <div class="login-gate-actions flex">
-                        <button @click="performLogin" class="solid-button flex-1">登录</button>
+                    <p class="auth-brand__lead">{{ passwordLoginEnabled ? '登录后查看实例状态、流量用量、定时策略和系统日志。' : '密码登录已关闭，请使用 Passkey 验证后进入控制台。' }}</p>
+                    <div v-if="passwordLoginEnabled">
+                        <input
+                            v-model="passwordInput"
+                            @keyup.enter="performLogin"
+                            type="password"
+                            class="glass-input mt-6"
+                            placeholder="请输入管理员密码"
+                        >
+                        <div class="login-gate-actions flex">
+                            <button @click="performLogin" class="solid-button flex-1">登录</button>
+                        </div>
+                    </div>
+                    <div v-if="passkeyAvailable" class="passkey-login-option">
+                        <div class="passkey-login-option__rule"><span>或</span></div>
+                        <button v-if="passkeySupported" @click="loginWithPasskey" class="ghost-button full-width-button" :disabled="passkeyBusy">
+                            {{ passkeyBusy ? '验证中...' : '使用 Passkey 登录' }}
+                        </button>
+                        <p v-if="passkeySupported" class="mt-2 text-center text-xs leading-5 text-[var(--muted)]">使用设备指纹、面容或安全密钥，无需输入管理员密码。</p>
+                        <p v-else class="mt-2 text-center text-xs leading-5 text-amber-700">{{ passkeySupportHint }}</p>
+                    </div>
+                    <div v-if="!passwordLoginEnabled && !passkeyAvailable" class="mt-6 rounded-[18px] border border-red-200 bg-red-50/80 px-4 py-3 text-sm leading-6 text-red-700">
+                        当前没有可用的 Passkey，请联系管理员恢复密码登录。
                     </div>
                 </div>
             </div>
@@ -3927,6 +3961,33 @@
                                     <div>
                                         <label class="mb-2 block text-sm font-semibold text-[#6f7787]">管理员密码</label>
                                         <input v-model="config.admin_password" type="password" class="glass-input" autocomplete="new-password" placeholder="留空表示不修改，至少 6 位">
+                                    </div>
+                                    <div class="settings-brand-card rounded-[18px] border border-slate-200/70 bg-white/70 p-4">
+                                        <div class="flex flex-wrap items-center justify-between gap-4">
+                                            <div>
+                                                <p class="text-sm font-semibold text-[#1f2328]">Passkey 快速登录</p>
+                                                <p class="mt-1 text-xs leading-5 text-[var(--muted)]">
+                                                    {{ passkeyCount > 0 ? `已设置 ${passkeyCount} 个 Passkey，可在登录页免输入密码。` : '使用设备指纹、面容或安全密钥登录。首次设置仍需先完成密码登录。' }}
+                                                </p>
+                                            </div>
+                                            <button @click="registerPasskey" class="ghost-button" :disabled="passkeyBusy || !passkeySupported">
+                                                {{ passkeyBusy ? '处理中...' : passkeyCount > 0 ? '添加 Passkey' : '设置 Passkey' }}
+                                            </button>
+                                        </div>
+                                        <p v-if="!passkeySupported" class="mt-2 text-xs leading-5 text-amber-700">{{ passkeySupportHint }}</p>
+                                        <label class="switch-row mt-3 flex items-center justify-between gap-4 rounded-[16px] border border-slate-200/70 bg-white/70 px-3 py-3 text-sm">
+                                            <span>
+                                                <span class="block font-semibold text-[#1f2328]">允许密码登录</span>
+                                                <span class="mt-1 block text-xs leading-5 text-[var(--muted)]">
+                                                    {{ config.password_login_enabled ? '开启后可使用管理员密码登录。' : '已关闭，登录时只能使用 Passkey。' }}
+                                                </span>
+                                            </span>
+                                            <span class="switch-control shrink-0">
+                                                <input type="checkbox" v-model="config.password_login_enabled" :disabled="passkeyCount === 0">
+                                                <span class="switch-slider"></span>
+                                            </span>
+                                        </label>
+                                        <p v-if="passkeyCount === 0" class="mt-2 text-xs leading-5 text-amber-700">请先注册至少一个 Passkey，才能关闭密码登录。</p>
                                     </div>
                                     <div class="two-col-grid">
                                         <div>
@@ -5114,6 +5175,7 @@
 
                 const createDefaultConfig = () => ({
                     admin_password: '',
+                    password_login_enabled: true,
                     traffic_threshold: 95,
                     shutdown_mode: 'KeepCharging',
                     threshold_action: 'stop_and_notify',
@@ -5221,10 +5283,49 @@
                 const criticalError = ref(null);
                 const isAdmin = ref(false);
                 const cronWarning = ref(false);
-                const currentMenu = ref('status');
-                const currentSettingsTab = ref('global');
-                const currentNotifyTab = ref('email');
-                const currentLogTab = ref('action');
+                const navigationStorageKey = 'ecs-controller.navigation';
+                const readNavigationState = () => {
+                    try {
+                        const raw = window.sessionStorage.getItem(navigationStorageKey);
+                        const parsed = raw ? JSON.parse(raw) : {};
+                        return parsed && typeof parsed === 'object' ? parsed : {};
+                    } catch (error) {
+                        return {};
+                    }
+                };
+                const savedNavigation = readNavigationState();
+                const validMenus = ['status', 'manage', 'accounts', 'settings', 'logs'];
+                const validSettingsTabs = ['global', 'ddns', 'notifications', 'updates'];
+                const validNotifyTabs = ['email', 'telegram', 'webhook'];
+                const validLogTabs = ['action', 'heartbeat'];
+                const currentMenu = ref(validMenus.includes(savedNavigation.menu) ? savedNavigation.menu : 'status');
+                const currentSettingsTab = ref(validSettingsTabs.includes(savedNavigation.settingsTab) ? savedNavigation.settingsTab : 'global');
+                const currentNotifyTab = ref(validNotifyTabs.includes(savedNavigation.notifyTab) ? savedNavigation.notifyTab : 'email');
+                const currentLogTab = ref(validLogTabs.includes(savedNavigation.logTab) ? savedNavigation.logTab : 'action');
+                const passkeySecureContext = typeof window !== 'undefined' && (
+                    window.isSecureContext || ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+                );
+                const passkeySupported = ref(passkeySecureContext && 'PublicKeyCredential' in window && !!navigator.credentials);
+                const passkeySupportHint = computed(() => {
+                    if (!passkeySecureContext) return 'Passkey 需要 HTTPS 安全连接；本地测试可以使用 localhost。';
+                    return '当前浏览器不支持 Passkey，建议使用最新版 Chrome、Safari 或 Edge。';
+                });
+                const passkeyAvailable = ref(false);
+                const passkeyCount = ref(0);
+                const passwordLoginEnabled = ref(true);
+                const passkeyBusy = ref(false);
+                const persistNavigationState = () => {
+                    try {
+                        window.sessionStorage.setItem(navigationStorageKey, JSON.stringify({
+                            menu: currentMenu.value,
+                            settingsTab: currentSettingsTab.value,
+                            notifyTab: currentNotifyTab.value,
+                            logTab: currentLogTab.value
+                        }));
+                    } catch (error) {
+                        // Storage can be unavailable in private browsing or embedded contexts.
+                    }
+                };
                 const logAutoRefresh = ref(false);
                 const statusSyncInterval = ref(600);
                 const sendingEmail = ref(false);
@@ -5603,6 +5704,7 @@
                     if (next.admin_password === '********') {
                         next.admin_password = '';
                     }
+                    next.password_login_enabled = next.password_login_enabled !== false;
 
                     next.Notification = {
                         ...next.Notification,
@@ -5634,6 +5736,7 @@
                     const source = value || {};
                     return JSON.stringify({
                         admin_password: source.admin_password || '',
+                        password_login_enabled: source.password_login_enabled !== false,
                         traffic_threshold: Number(source.traffic_threshold || 95),
                         shutdown_mode: source.shutdown_mode || 'KeepCharging',
                         threshold_action: source.threshold_action || 'stop_and_notify',
@@ -5698,6 +5801,9 @@
                         const res = await fetch('index.php?action=get_config');
                         const data = await res.json();
                         config.value = normalizeConfig(data);
+                        passwordLoginEnabled.value = data.password_login_enabled !== false;
+                        passkeyCount.value = Number(data.passkey_count || 0);
+                        passkeyAvailable.value = passkeyCount.value > 0;
                         markConfigClean();
                     } catch (error) {
                         console.error('Fetch config failed', error);
@@ -6756,7 +6862,164 @@
                     }
                 };
 
+                const passkeyBase64urlToBuffer = (value) => {
+                    const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+                    const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+                    const binary = atob(padded);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let index = 0; index < binary.length; index += 1) {
+                        bytes[index] = binary.charCodeAt(index);
+                    }
+                    return bytes.buffer;
+                };
+
+                const passkeyBufferToBase64url = (value) => {
+                    const bytes = value instanceof ArrayBuffer
+                        ? new Uint8Array(value)
+                        : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+                    let binary = '';
+                    bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+                    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+                };
+
+                const serializePasskeyCredential = (credential) => {
+                    if (!credential || !credential.response) {
+                        throw new Error('未收到 Passkey 凭据');
+                    }
+                    const response = credential.response;
+                    const result = {
+                        id: credential.id,
+                        rawId: passkeyBufferToBase64url(credential.rawId),
+                        type: credential.type,
+                        response: {
+                            clientDataJSON: passkeyBufferToBase64url(response.clientDataJSON)
+                        }
+                    };
+                    if (response.attestationObject) {
+                        result.response.attestationObject = passkeyBufferToBase64url(response.attestationObject);
+                    }
+                    if (response.authenticatorData) {
+                        result.response.authenticatorData = passkeyBufferToBase64url(response.authenticatorData);
+                    }
+                    if (response.signature) {
+                        result.response.signature = passkeyBufferToBase64url(response.signature);
+                    }
+                    result.response.userHandle = response.userHandle
+                        ? passkeyBufferToBase64url(response.userHandle)
+                        : null;
+                    return result;
+                };
+
+                const passkeyCreationOptions = (data) => {
+                    const publicKey = { ...data.publicKey };
+                    publicKey.challenge = passkeyBase64urlToBuffer(publicKey.challenge);
+                    publicKey.user = {
+                        ...publicKey.user,
+                        id: passkeyBase64urlToBuffer(publicKey.user.id)
+                    };
+                    publicKey.excludeCredentials = (publicKey.excludeCredentials || []).map((item) => ({
+                        ...item,
+                        id: passkeyBase64urlToBuffer(item.id)
+                    }));
+                    return publicKey;
+                };
+
+                const passkeyAssertionOptions = (data) => {
+                    const publicKey = { ...data.publicKey };
+                    publicKey.challenge = passkeyBase64urlToBuffer(publicKey.challenge);
+                    publicKey.allowCredentials = (publicKey.allowCredentials || []).map((item) => ({
+                        ...item,
+                        id: passkeyBase64urlToBuffer(item.id)
+                    }));
+                    return publicKey;
+                };
+
+                const passkeyErrorMessage = (error, fallback) => {
+                    if (error?.name === 'NotAllowedError') return 'Passkey 操作已取消';
+                    return error?.message || fallback;
+                };
+
+                const registerPasskey = async () => {
+                    if (!passkeySupported.value || typeof navigator.credentials?.create !== 'function') {
+                        openAlert('当前浏览器不支持 Passkey', 'error');
+                        return;
+                    }
+                    passkeyBusy.value = true;
+                    try {
+                        const startRes = await fetch('index.php?action=passkey_register_start', {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        });
+                        const startData = await startRes.json();
+                        if (!startRes.ok || !startData.publicKey) {
+                            throw new Error(startData.message || 'Passkey 注册初始化失败');
+                        }
+                        const credential = await navigator.credentials.create({
+                            publicKey: passkeyCreationOptions(startData)
+                        });
+                        const finishRes = await fetch('index.php?action=passkey_register_finish', {
+                            method: 'POST',
+                            body: JSON.stringify(serializePasskeyCredential(credential))
+                        });
+                        const finishData = await finishRes.json();
+                        if (!finishRes.ok || !finishData.success) {
+                            throw new Error(finishData.message || 'Passkey 注册失败');
+                        }
+                        passkeyCount.value = Number(finishData.count || passkeyCount.value + 1);
+                        passkeyAvailable.value = passkeyCount.value > 0;
+                        openAlert('Passkey 已注册，以后可以免输入密码登录', 'success');
+                    } catch (error) {
+                        console.error('Register passkey failed', error);
+                        openAlert(passkeyErrorMessage(error, 'Passkey 注册失败'), 'error');
+                    } finally {
+                        passkeyBusy.value = false;
+                    }
+                };
+
+                const loginWithPasskey = async () => {
+                    if (!passkeySupported.value || typeof navigator.credentials?.get !== 'function') {
+                        openAlert('当前浏览器不支持 Passkey', 'error');
+                        return;
+                    }
+                    passkeyBusy.value = true;
+                    try {
+                        const startRes = await fetch('index.php?action=passkey_login_start', {
+                            method: 'POST',
+                            body: JSON.stringify({})
+                        });
+                        const startData = await startRes.json();
+                        if (!startRes.ok || !startData.publicKey) {
+                            throw new Error(startData.message || 'Passkey 登录初始化失败');
+                        }
+                        const getOptions = { publicKey: passkeyAssertionOptions(startData) };
+                        if (startData.mediation) getOptions.mediation = startData.mediation;
+                        const credential = await navigator.credentials.get(getOptions);
+                        const finishRes = await fetch('index.php?action=passkey_login_finish', {
+                            method: 'POST',
+                            body: JSON.stringify(serializePasskeyCredential(credential))
+                        });
+                        const finishData = await finishRes.json();
+                        if (!finishRes.ok || !finishData.success) {
+                            throw new Error(finishData.message || 'Passkey 登录失败');
+                        }
+                        passwordInput.value = '';
+                        showLoginModal.value = false;
+                        isAdmin.value = true;
+                        await fetchConfig();
+                        await fetchAllInstances(false);
+                    } catch (error) {
+                        console.error('Passkey login failed', error);
+                        openAlert(passkeyErrorMessage(error, 'Passkey 登录失败'), 'error');
+                    } finally {
+                        passkeyBusy.value = false;
+                    }
+                };
+
                 const performLogin = async () => {
+                    if (!passwordLoginEnabled.value) {
+                        openAlert('密码登录已关闭，请使用 Passkey 登录', 'error');
+                        return;
+                    }
                     try {
                         const res = await fetch('index.php?action=login', {
                             method: 'POST',
@@ -6842,12 +7105,15 @@
                             criticalError.value = data.error;
                             return;
                         }
+                        passkeyCount.value = Number(data.passkey_count || 0);
+                        passkeyAvailable.value = !!data.passkey_enabled;
+                        passwordLoginEnabled.value = data.password_login_enabled !== false;
                         config.value.AppBrand.logo_url = data.brand?.logo_url || '';
                         initialized.value = !!data.initialized;
                         if (initialized.value) {
                             await checkLoginStatus();
                             if (isAdmin.value) {
-                                await fetchStatusData();
+                                await syncCurrentMenu();
                             } else {
                                 loading.value = false;
                             }
@@ -6890,10 +7156,11 @@
                 }[type] || '信息');
 
                 const reloadPage = () => {
+                    persistNavigationState();
                     window.location.reload();
                 };
 
-                watch(currentMenu, async (menu) => {
+                const syncCurrentMenu = async (menu = currentMenu.value) => {
                     if (menu === 'status' && isAdmin.value) {
                         await fetchStatusData();
                     } else {
@@ -6919,7 +7186,10 @@
                     } else {
                         stopLogPolling();
                     }
-                });
+                };
+
+                watch(currentMenu, syncCurrentMenu);
+                watch([currentMenu, currentSettingsTab, currentNotifyTab, currentLogTab], persistNavigationState);
 
                 watch(currentSettingsTab, async (tab) => {
                     if (tab === 'updates' && isAdmin.value) {
@@ -6932,7 +7202,7 @@
                 watch(isAdmin, async (value) => {
                     if (value) {
                         await fetchConfig();
-                        await fetchStatusData();
+                        await syncCurrentMenu();
                     } else {
                         statusInstances.value = [];
                         stopStatusPolling();
@@ -7025,6 +7295,12 @@
                     menuItems,
                     settingsItems,
                     settingsDirty,
+                    passkeyAvailable,
+                    passkeyCount,
+                    passwordLoginEnabled,
+                    passkeySupported,
+                    passkeySupportHint,
+                    passkeyBusy,
                     manageFilter,
                     accountOptions,
                     passwordInput,
@@ -7098,6 +7374,8 @@
                     getRegionName,
                     toggleAdmin,
                     performLogin,
+                    loginWithPasskey,
+                    registerPasskey,
                     performSetup,
                     fetchStatusData,
                     fetchAllInstances,

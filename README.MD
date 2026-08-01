@@ -49,6 +49,16 @@ curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.
 
 管理端口默认只绑定到本机。如需公网访问，请在前面配置 HTTPS 反向代理，并设置 `ECS_COOKIE_SECURE=1`；不要直接把管理端口暴露到公网。
 
+### Passkey 快速登录
+
+首次使用时先用管理员密码登录，在“系统设置 → 全局设置”中点击“设置 Passkey”。浏览器会调用设备指纹、面容、系统 PIN 或安全密钥完成注册；注册后登录页会出现“使用 Passkey 登录”，原有密码登录仍然保留。可以在多个设备上重复添加 Passkey，但请至少保留一种可用的密码或 Passkey 作为备用登录方式。
+
+注册至少一个 Passkey 后，设置页会出现“允许密码登录”开关。关闭后，登录页和后端密码登录接口都会拒绝管理员密码，只能使用 Passkey；通过 Passkey 登录后可以重新打开该开关。建议先在两个设备上注册 Passkey，并在关闭密码登录前确认至少一个 Passkey 可以正常使用，否则需要通过恢复数据卷或手动修改 SQLite 设置进行恢复。
+
+Passkey 只在安全来源上可用：公网部署必须通过 HTTPS 访问，`http://localhost` 仅适合本地测试。服务会自动根据当前访问域名和协议生成 WebAuthn 的 RP ID 与 Origin，不需要修改 Compose 或其他配置文件。通过反向代理部署时，请保留并正确传递 `Host`、`X-Forwarded-Host` 和 `X-Forwarded-Proto`，否则服务无法判断浏览器实际访问的域名。
+
+Passkey 凭据和登录/注册挑战会使用现有 `.secret_encryption.key` 加密后存入 SQLite；请像保护管理员密码和阿里云密钥一样备份并保护整个数据卷。挑战有效期为 5 分钟，完成或失败后不可重复使用。
+
 > 迁移说明：如果从旧版本升级，首次启动时会把 `./data` 中的 SQLite 数据和加密密钥复制到 Go 服务使用的 named volume；复制完成后即可移除旧的 PHP 部署文件。Go 后端已覆盖鉴权、配置/账号持久化、兼容 action API、实例状态同步、启动/停止/释放、EIP 操作、异步 ECS 创建、ECS 库存/架构/系统盘预检、CMS 分钟级实例流量账本、CDT 账号汇总、阈值停机、定时开关机、保活、基础账单缓存、Webhook/Telegram/SMTP 测试通道、Telegram Bot 控制、Cloudflare DDNS、多实例记录编排、通知事件策略和任务补偿。BSS 价格预估仍未完整接入，真实阿里云、Cloudflare 线上验收仍需使用对应账号完成。
 
 ### 前端在线更新

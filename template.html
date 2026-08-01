@@ -2411,9 +2411,9 @@
         .update-center-card {
             position: relative;
             display: grid;
-            gap: 16px;
+            gap: 12px;
             overflow: hidden;
-            padding: 1.35rem 1.4rem 1.25rem;
+            padding: 1.05rem 1.1rem 1rem;
             transition: border-color .24s ease, box-shadow .24s ease, background .24s ease;
         }
 
@@ -2422,15 +2422,15 @@
             background:
                 radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 32%),
                 color-mix(in srgb, var(--accent-light) 24%, var(--panel));
-            box-shadow: 0 14px 34px color-mix(in srgb, var(--accent) 12%, transparent);
+            box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 10%, transparent);
         }
 
         .update-center-card__head {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 20px;
-            padding-bottom: 15px;
+            gap: 14px;
+            padding-bottom: 11px;
             border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
         }
 
@@ -2449,19 +2449,11 @@
             display: flex;
             align-items: baseline;
             gap: 10px;
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .update-center-card__title-row h3 {
             margin: 0;
-        }
-
-        .update-center-card__subtitle {
-            max-width: 620px;
-            margin: 5px 0 0;
-            color: var(--muted);
-            font-size: .74rem;
-            line-height: 1.5;
         }
 
         .update-center-card__state {
@@ -2484,6 +2476,12 @@
             color: var(--accent-strong);
         }
 
+        .update-center-card__state--current {
+            border-color: color-mix(in srgb, var(--success) 30%, var(--line));
+            background: color-mix(in srgb, var(--success-bg) 78%, var(--panel));
+            color: var(--success-text);
+        }
+
         .update-center-card__state-dot {
             width: 6px;
             height: 6px;
@@ -2498,13 +2496,13 @@
             justify-content: center;
             gap: 7px;
             flex: 0 0 auto;
-            min-height: 36px;
-            padding: 0 11px;
+            min-height: 33px;
+            padding: 0 10px;
             border: 1px solid var(--line);
             border-radius: 9px;
             background: color-mix(in srgb, var(--panel) 78%, var(--control-bg));
             color: var(--accent);
-            font-size: .76rem;
+            font-size: .72rem;
             font-weight: 800;
             text-decoration: none;
             transition: border-color .2s ease, background .2s ease, transform .2s ease;
@@ -2524,21 +2522,18 @@
 
         .update-center-card__body {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 136px;
+            grid-template-columns: minmax(0, 1fr) 112px;
             align-items: stretch;
-            gap: 16px;
+            gap: 12px;
         }
 
         .update-release {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr);
+            grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr);
             align-items: stretch;
-            gap: 9px;
+            gap: 6px;
             min-width: 0;
-            padding: 9px;
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            background: color-mix(in srgb, var(--control-bg) 86%, var(--panel));
+            padding: 0;
         }
 
         .update-release__version {
@@ -2546,10 +2541,11 @@
             min-width: 0;
             flex-direction: column;
             justify-content: center;
-            gap: 7px;
-            padding: 10px 12px;
-            border: 1px solid transparent;
+            gap: 5px;
+            padding: 8px 10px;
+            border: 1px solid var(--line);
             border-radius: 9px;
+            background: color-mix(in srgb, var(--control-bg) 66%, var(--panel));
         }
 
         .update-release__version.latest-version {
@@ -2561,7 +2557,7 @@
 
         .update-release__label {
             color: var(--muted);
-            font-size: .66rem;
+            font-size: .62rem;
             font-weight: 700;
             letter-spacing: .04em;
         }
@@ -2576,7 +2572,7 @@
         .update-release__value {
             overflow: hidden;
             color: var(--text);
-            font-size: .98rem;
+            font-size: .9rem;
             font-weight: 850;
             letter-spacing: -.02em;
             text-overflow: ellipsis;
@@ -2618,7 +2614,7 @@
 
         .update-center-card__actions > button {
             width: 100%;
-            min-height: 40px;
+            min-height: 36px;
         }
 
         .update-center-card__progress {
@@ -2896,7 +2892,7 @@
 
         @media (max-width: 600px) {
             .update-center-card {
-                padding: 1.1rem;
+                padding: .95rem;
             }
 
             .update-center-card__head {
@@ -4433,24 +4429,23 @@
                         </div>
 
                         <div class="about-grid">
-                            <div class="metric-card update-center-card" :class="{ 'has-update': hasAvailableUpdate }">
+                            <div class="metric-card update-center-card" :class="{ 'has-update': hasVersionUpdate }">
                                 <div class="update-center-card__head">
                                     <div class="update-center-card__intro">
                                         <div class="update-center-card__eyebrow">
                                             <p class="subtle-label">版本中心</p>
-                                            <span v-if="hasAvailableUpdate" class="update-center-card__state update-center-card__state--new">
+                                            <span v-if="hasVersionUpdate" class="update-center-card__state update-center-card__state--new">
                                                 <span class="update-center-card__state-dot"></span>
                                                 发现新版本
                                             </span>
-                                            <span v-else-if="updateInfo.latest?.version" class="update-center-card__state">
+                                            <span v-else-if="updateInfo.latest?.version" class="update-center-card__state update-center-card__state--current">
                                                 <span class="update-center-card__state-dot"></span>
-                                                已完成检查
+                                                已是最新版本
                                             </span>
                                         </div>
                                         <div class="update-center-card__title-row">
                                             <h3 class="text-lg font-bold">在线更新</h3>
                                         </div>
-                                        <p class="update-center-card__subtitle">仅拉取已发布的 Docker 镜像，部署机器不会执行镜像构建。</p>
                                     </div>
 
                                     <a :href="updateInfo.repository_url || 'https://github.com/Kori1c/ecs-controller'" target="_blank" rel="noopener noreferrer" class="update-center-card__link" aria-label="打开 GitHub 项目">
@@ -4471,7 +4466,7 @@
                                         <div class="update-release__connector" aria-hidden="true">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
                                         </div>
-                                        <div class="update-release__version" :class="{ 'latest-version': hasAvailableUpdate }">
+                                        <div class="update-release__version" :class="{ 'latest-version': hasVersionUpdate }">
                                             <span class="update-release__label">最新版本</span>
                                             <div class="update-release__value-row">
                                                 <strong class="update-release__value">{{ updateInfo.latest?.version || '未检查' }}</strong>
@@ -5451,6 +5446,9 @@
                     updateInfo.value.update_available &&
                     updateInfo.value.image_available &&
                     updateInfo.value.latest?.commit
+                ));
+                const hasVersionUpdate = computed(() => Boolean(
+                    updateInfo.value.source_update_available || updateInfo.value.update_available
                 ));
                 const statusInstances = ref([]);
                 const allInstances = ref([]);
@@ -7458,6 +7456,7 @@
                     updateState,
                     updateReloadPending,
                     hasAvailableUpdate,
+                    hasVersionUpdate,
                     brandLogoUrl,
                     cronWarning,
                     criticalError,

@@ -446,7 +446,7 @@ func (s *Server) getCachedCDTTraffic(group app.AccountGroup, accountID int64, cy
 }
 
 func (s *Server) billDetails(w http.ResponseWriter, r *http.Request, data map[string]any) {
-	const billingDetailCacheType = "bill_details_v4"
+	const billingDetailCacheType = "bill_details_v6"
 	if s.Store.GetSetting("enable_billing", "0") != "1" {
 		s.error(w, http.StatusBadRequest, "请先在系统设置中开启费用中心")
 		return

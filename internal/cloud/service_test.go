@@ -206,7 +206,7 @@ func TestHongKongCountsAsOverseasCDTRegion(t *testing.T) {
 	}
 }
 
-func TestGetBillingDetailsUsesDailyInstanceBill(t *testing.T) {
+func TestGetBillingDetailsUsesDailySplitItemBill(t *testing.T) {
 	var mu sync.Mutex
 	requests := make([]url.Values, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -217,18 +217,21 @@ func TestGetBillingDetailsUsesDailyInstanceBill(t *testing.T) {
 		response := map[string]any{
 			"Code": "Success",
 			"Data": map[string]any{
-				"Items": map[string]any{
-					"Item": []map[string]any{{
-						"BillingDate":   "2026-08-01",
-						"ProductName":   "云服务器 ECS",
-						"ProductCode":   "ecs",
-						"PretaxAmount":  "1.25",
-						"Currency":      "CNY",
-						"InstanceID":    "i-1",
-						"InstanceSpec":  "ecs.test",
-						"ServicePeriod": "86400",
-					}},
-				},
+				"Items": []map[string]any{{
+					"BillingDate":      "2026-08-01",
+					"ProductName":      "云服务器 ECS",
+					"ProductCode":      "ecs",
+					"ProductDetail":    "按量付费 ECS 计算资源",
+					"BillingItem":      "计算资源",
+					"BillingItemCode":  "instance",
+					"BillingType":      "按量付费",
+					"SubscriptionType": "PayAsYouGo",
+					"PretaxAmount":     "1.25",
+					"Currency":         "CNY",
+					"InstanceID":       "i-1",
+					"InstanceSpec":     "ecs.test",
+					"ServicePeriod":    "86400",
+				}},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(response)
@@ -247,7 +250,7 @@ func TestGetBillingDetailsUsesDailyInstanceBill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(details) != 1 || details[0].Date != "2026-08-01" || details[0].Amount != 1.25 {
+	if len(details) != 1 || details[0].Date != "2026-08-01" || details[0].Amount != 1.25 || details[0].BillingItem != "计算资源" || details[0].ProductDetail != "按量付费 ECS 计算资源" {
 		t.Fatalf("unexpected billing details: %#v", details)
 	}
 
@@ -256,8 +259,8 @@ func TestGetBillingDetailsUsesDailyInstanceBill(t *testing.T) {
 	if len(requests) != 1 {
 		t.Fatalf("billing API calls=%d, want 1", len(requests))
 	}
-	if got := requests[0].Get("Action"); got != "QueryInstanceBill" {
-		t.Fatalf("action=%q, want QueryInstanceBill", got)
+	if got := requests[0].Get("Action"); got != "DescribeSplitItemBill" {
+		t.Fatalf("action=%q, want DescribeSplitItemBill", got)
 	}
 	if got := requests[0].Get("Granularity"); got != "DAILY" {
 		t.Fatalf("granularity=%q, want DAILY", got)
@@ -267,5 +270,8 @@ func TestGetBillingDetailsUsesDailyInstanceBill(t *testing.T) {
 	}
 	if got := requests[0].Get("BillingDate"); got != "2026-08-01" {
 		t.Fatalf("billing date=%q", got)
+	}
+	if got := requests[0].Get("IsHideZeroCharge"); got != "true" {
+		t.Fatalf("hide zero charge=%q", got)
 	}
 }

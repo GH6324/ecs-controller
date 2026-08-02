@@ -68,14 +68,19 @@ type BillingClient interface {
 }
 
 type BillingDetail struct {
-	Date        string  `json:"date"`
-	ProductName string  `json:"product_name"`
-	ProductCode string  `json:"product_code,omitempty"`
-	InstanceID  string  `json:"instance_id,omitempty"`
-	Amount      float64 `json:"amount"`
-	Currency    string  `json:"currency"`
-	Usage       float64 `json:"usage,omitempty"`
-	Unit        string  `json:"unit,omitempty"`
+	Date             string  `json:"date"`
+	ProductName      string  `json:"product_name"`
+	ProductCode      string  `json:"product_code,omitempty"`
+	ProductDetail    string  `json:"product_detail,omitempty"`
+	BillingItem      string  `json:"billing_item,omitempty"`
+	BillingItemCode  string  `json:"billing_item_code,omitempty"`
+	BillingType      string  `json:"billing_type,omitempty"`
+	SubscriptionType string  `json:"subscription_type,omitempty"`
+	InstanceID       string  `json:"instance_id,omitempty"`
+	Amount           float64 `json:"amount"`
+	Currency         string  `json:"currency"`
+	Usage            float64 `json:"usage,omitempty"`
+	Unit             string  `json:"unit,omitempty"`
 }
 
 // BillingDetailClient is optional so existing lightweight cloud fakes do not
@@ -395,10 +400,9 @@ func (s *Service) GetBilling(ctx context.Context, siteType, instanceID, billingC
 	return balance, total, currency, nil
 }
 
-// QueryInstanceBill exposes exact per-day ECS charges. QueryBillOverview looks
-// like a daily endpoint, but its returned PretaxAmount is the billing-cycle
-// total and its rows do not carry a billing date, so it cannot back a daily
-// history without duplicating the same amount across every requested date.
+// GetBillingDetails uses Alibaba's split-item bill endpoint so a daily record
+// can include the product's billing item (for example, compute, disk, or
+// bandwidth) instead of collapsing everything into one instance total.
 func (s *Service) GetBillingDetails(ctx context.Context, siteType, billingCycle, requestedDate string) ([]BillingDetail, error) {
 	if _, err := time.Parse("2006-01", billingCycle); err != nil {
 		return nil, fmt.Errorf("invalid billing cycle %q", billingCycle)
@@ -409,26 +413,75 @@ func (s *Service) GetBillingDetails(ctx context.Context, siteType, billingCycle,
 
 	bss := s.WithSite(siteType).BSS
 	params := map[string]string{
+		"BillingCycle":     billingCycle,
+		"BillingDate":      requestedDate,
+		"Granularity":      "DAILY",
+		"IsHideZeroCharge": "true",
+		"MaxResults":       "100",
+	}
+	details := make([]BillingDetail, 0)
+	for page := 0; page < 100; page++ {
+		result, err := bss.Call(ctx, "DescribeSplitItemBill", params)
+		if err != nil {
+			if page == 0 {
+				// Keep older accounts usable when the split-item permission is
+				// missing; the fallback still provides instance-level details.
+				return s.getInstanceBillingDetails(ctx, siteType, billingCycle, requestedDate)
+			}
+			return nil, err
+		}
+
+		items := mapsAt(result, "Data.Items")
+		if len(items) == 0 {
+			items = mapsAt(result, "Data.Items.Item")
+		}
+		for _, item := range items {
+			details = append(details, billingDetailFromMap(item, "", map[bool]string{true: "USD", false: "CNY"}[siteType == "international"], requestedDate))
+		}
+
+		data, _ := result["Data"].(map[string]any)
+		nextToken := stringValue(data["NextToken"])
+		if nextToken == "" {
+			break
+		}
+		params["NextToken"] = nextToken
+	}
+	if len(details) == 0 {
+		// Some accounts have no split-bill records even though their instance
+		// bill is available. Fall back per day so the history does not go blank.
+		return s.getInstanceBillingDetails(ctx, siteType, billingCycle, requestedDate)
+	}
+	return sortBillingDetails(details), nil
+}
+
+func (s *Service) getInstanceBillingDetails(ctx context.Context, siteType, billingCycle, requestedDate string) ([]BillingDetail, error) {
+	bss := s.WithSite(siteType).BSS
+	result, err := bss.Call(ctx, "QueryInstanceBill", map[string]string{
 		"BillingCycle": billingCycle,
 		"BillingDate":  requestedDate,
 		"Granularity":  "DAILY",
-	}
-	details := make([]BillingDetail, 0)
-	result, err := bss.Call(ctx, "QueryInstanceBill", params)
+	})
 	if err != nil {
 		return nil, err
 	}
+	details := make([]BillingDetail, 0)
 	for _, item := range mapsAt(result, "Data.Items.Item") {
 		details = append(details, billingDetailFromMap(item, "", map[bool]string{true: "USD", false: "CNY"}[siteType == "international"], requestedDate))
 	}
+	return sortBillingDetails(details), nil
+}
 
+func sortBillingDetails(details []BillingDetail) []BillingDetail {
 	sort.SliceStable(details, func(i, j int) bool {
 		if details[i].Date == details[j].Date {
+			if details[i].ProductName == details[j].ProductName {
+				return details[i].BillingItem < details[j].BillingItem
+			}
 			return details[i].ProductName < details[j].ProductName
 		}
 		return details[i].Date > details[j].Date
 	})
-	return details, nil
+	return details
 }
 
 func billingDetailFromMap(item map[string]any, fallbackInstanceID, fallbackCurrency, fallbackDate string) BillingDetail {
@@ -455,6 +508,11 @@ func billingDetailFromMap(item map[string]any, fallbackInstanceID, fallbackCurre
 	if currency == "" {
 		currency = "CNY"
 	}
+	productDetail := firstString(item, "SplitProductDetail", "ProductDetail")
+	billingItem := firstString(item, "BillingItem", "BillingItemName")
+	billingItemCode := firstString(item, "BillingItemCode")
+	billingType := firstString(item, "BillingType")
+	subscriptionType := firstString(item, "SubscriptionType")
 	usage := floatValue(item["Usage"])
 	if usage == 0 {
 		usage = floatValue(item["UsageAmount"])
@@ -467,14 +525,19 @@ func billingDetailFromMap(item map[string]any, fallbackInstanceID, fallbackCurre
 		date = fallbackDate
 	}
 	return BillingDetail{
-		Date:        date,
-		ProductName: productName,
-		ProductCode: productCode,
-		InstanceID:  instanceID,
-		Amount:      amount,
-		Currency:    currency,
-		Usage:       usage,
-		Unit:        firstString(item, "Unit", "UsageUnit"),
+		Date:             date,
+		ProductName:      productName,
+		ProductCode:      productCode,
+		ProductDetail:    productDetail,
+		BillingItem:      billingItem,
+		BillingItemCode:  billingItemCode,
+		BillingType:      billingType,
+		SubscriptionType: subscriptionType,
+		InstanceID:       instanceID,
+		Amount:           amount,
+		Currency:         currency,
+		Usage:            usage,
+		Unit:             firstString(item, "Unit", "UsageUnit"),
 	}
 }
 

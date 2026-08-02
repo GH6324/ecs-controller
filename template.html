@@ -1833,6 +1833,13 @@
             font-weight: 750;
         }
 
+        .billing-details-table__item {
+            margin-top: 4px;
+            color: var(--accent-strong);
+            font-size: 0.72rem;
+            font-weight: 750;
+        }
+
         .billing-details-table__code,
         .billing-details-table__instance {
             margin-top: 3px;
@@ -5069,7 +5076,7 @@
                     <table class="billing-details-table">
                         <thead>
                             <tr>
-                                <th>产品</th>
+                                <th>产品 / 计费项目</th>
                                 <th>用量</th>
                                 <th>金额</th>
                             </tr>
@@ -5078,6 +5085,8 @@
                             <tr v-for="(item, index) in selectedBillingDay?.items || []" :key="`billing-detail-${selectedBillingDate}-${index}`">
                                 <td>
                                     <div class="billing-details-table__product">{{ item.product_name }}</div>
+                                    <div v-if="item.billing_item" class="billing-details-table__item">计费项目：{{ item.billing_item }}</div>
+                                    <div v-if="item.product_detail && item.product_detail !== item.product_name" class="billing-details-table__code">明细：{{ item.product_detail }}</div>
                                     <div v-if="item.product_code" class="billing-details-table__code">{{ item.product_code }}</div>
                                     <div v-if="item.instance_id" class="billing-details-table__instance">实例：{{ item.instance_id }}</div>
                                 </td>
@@ -5928,7 +5937,10 @@
                         day.count += 1;
                         day.total += Number.isFinite(amount) ? amount : 0;
                         day.items.push(item);
-                        const product = item.product_name || item.product_code || '其他费用';
+                        const productName = item.product_name || item.product_code || '其他费用';
+                        const product = item.billing_item
+                            ? `${productName} · ${item.billing_item}`
+                            : productName;
                         if (!day.products.includes(product)) {
                             day.products.push(product);
                         }

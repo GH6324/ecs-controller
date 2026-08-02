@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -64,6 +65,23 @@ type PreflightClient interface {
 type BillingClient interface {
 	GetAccountBalance(context.Context, string) (float64, string, error)
 	GetBillOverview(context.Context, string, string) (float64, string, error)
+}
+
+type BillingDetail struct {
+	Date        string  `json:"date"`
+	ProductName string  `json:"product_name"`
+	ProductCode string  `json:"product_code,omitempty"`
+	InstanceID  string  `json:"instance_id,omitempty"`
+	Amount      float64 `json:"amount"`
+	Currency    string  `json:"currency"`
+	Usage       float64 `json:"usage,omitempty"`
+	Unit        string  `json:"unit,omitempty"`
+}
+
+// BillingDetailClient is optional so existing lightweight cloud fakes do not
+// need to implement the detail endpoint used only by the billing modal.
+type BillingDetailClient interface {
+	GetBillingDetails(context.Context, string, string, string) ([]BillingDetail, error)
 }
 
 // MonthlyTrafficClient queries the current month's instance traffic directly
@@ -375,6 +393,112 @@ func (s *Service) GetBilling(ctx context.Context, siteType, instanceID, billingC
 		total += floatValue(item["PretaxAmount"])
 	}
 	return balance, total, currency, nil
+}
+
+// QueryInstanceBill exposes exact per-day ECS charges. QueryBillOverview looks
+// like a daily endpoint, but its returned PretaxAmount is the billing-cycle
+// total and its rows do not carry a billing date, so it cannot back a daily
+// history without duplicating the same amount across every requested date.
+func (s *Service) GetBillingDetails(ctx context.Context, siteType, billingCycle, requestedDate string) ([]BillingDetail, error) {
+	if _, err := time.Parse("2006-01", billingCycle); err != nil {
+		return nil, fmt.Errorf("invalid billing cycle %q", billingCycle)
+	}
+	if parsedDate, err := time.Parse("2006-01-02", requestedDate); err != nil || parsedDate.Format("2006-01") != billingCycle {
+		return nil, fmt.Errorf("invalid billing date %q for billing cycle %q", requestedDate, billingCycle)
+	}
+
+	bss := s.WithSite(siteType).BSS
+	params := map[string]string{
+		"BillingCycle": billingCycle,
+		"BillingDate":  requestedDate,
+		"Granularity":  "DAILY",
+	}
+	details := make([]BillingDetail, 0)
+	result, err := bss.Call(ctx, "QueryInstanceBill", params)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range mapsAt(result, "Data.Items.Item") {
+		details = append(details, billingDetailFromMap(item, "", map[bool]string{true: "USD", false: "CNY"}[siteType == "international"], requestedDate))
+	}
+
+	sort.SliceStable(details, func(i, j int) bool {
+		if details[i].Date == details[j].Date {
+			return details[i].ProductName < details[j].ProductName
+		}
+		return details[i].Date > details[j].Date
+	})
+	return details, nil
+}
+
+func billingDetailFromMap(item map[string]any, fallbackInstanceID, fallbackCurrency, fallbackDate string) BillingDetail {
+	amount := floatValue(item["PretaxAmount"])
+	if _, exists := item["PretaxAmount"]; !exists {
+		amount = floatValue(item["PretaxGrossAmount"])
+	}
+	productCode := firstString(item, "ProductCode", "ProductCodeId")
+	productName := firstString(item, "ProductName", "ProductNameEn", "ProductNameZh", "BillingItemName", "BillingItem")
+	if productName == "" {
+		productName = productCode
+	}
+	if productName == "" {
+		productName = "其他费用"
+	}
+	instanceID := firstString(item, "InstanceID", "InstanceId")
+	if instanceID == "" {
+		instanceID = fallbackInstanceID
+	}
+	currency := firstString(item, "Currency")
+	if currency == "" {
+		currency = fallbackCurrency
+	}
+	if currency == "" {
+		currency = "CNY"
+	}
+	usage := floatValue(item["Usage"])
+	if usage == 0 {
+		usage = floatValue(item["UsageAmount"])
+	}
+	if usage == 0 {
+		usage = floatValue(item["Quantity"])
+	}
+	date := billingDate(firstString(item, "BillingDate", "BillingDateString", "Date"))
+	if date == "" {
+		date = fallbackDate
+	}
+	return BillingDetail{
+		Date:        date,
+		ProductName: productName,
+		ProductCode: productCode,
+		InstanceID:  instanceID,
+		Amount:      amount,
+		Currency:    currency,
+		Usage:       usage,
+		Unit:        firstString(item, "Unit", "UsageUnit"),
+	}
+}
+
+func billingDate(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	for _, layout := range []string{
+		"2006-01-02",
+		"2006-01-02 15:04:05",
+		time.RFC3339,
+	} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.Format("2006-01-02")
+		}
+	}
+	if len(value) >= len("2006-01-02") {
+		candidate := value[:len("2006-01-02")]
+		if _, err := time.Parse("2006-01-02", candidate); err == nil {
+			return candidate
+		}
+	}
+	return value
 }
 
 func (s *Service) GetAccountBalance(ctx context.Context, siteType string) (float64, string, error) {

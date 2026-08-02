@@ -1145,6 +1145,16 @@
             overflow: hidden;
         }
 
+        /* Let the open time menu escape the animated wrapper instead of being clipped. */
+        .schedule-options:has(.time-picker.open) {
+            overflow: visible;
+        }
+
+        .schedule-option:has(.time-picker.open) {
+            position: relative;
+            z-index: 90;
+        }
+
         .schedule-options-enter-active,
         .schedule-options-leave-active {
             max-height: 360px;
@@ -1622,6 +1632,265 @@
             font-size: 0.75rem;
             color: var(--danger);
             line-height: 1.4;
+        }
+
+        .account-billing__details-button {
+            align-self: center;
+            margin-top: 2px;
+            border: 0;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--accent-light) 76%, transparent);
+            color: var(--accent-strong);
+            padding: 0.28rem 0.6rem;
+            font-size: 0.7rem;
+            font-weight: 800;
+            transition: background .15s ease, color .15s ease, transform .15s ease;
+        }
+
+        .account-billing__details-button:hover {
+            background: var(--accent);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .billing-modal {
+            width: min(940px, 100%);
+            max-height: min(760px, calc(100vh - 32px));
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .billing-details-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: 20px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: color-mix(in srgb, var(--panel-strong) 60%, transparent);
+            padding: 14px 16px;
+        }
+
+        .billing-details-summary__label {
+            color: var(--muted);
+            font-size: 0.75rem;
+        }
+
+        .billing-details-summary__value {
+            margin-top: 3px;
+            color: var(--text);
+            font-size: 1.25rem;
+            font-weight: 850;
+        }
+
+        .billing-details-summary__meta {
+            color: var(--muted);
+            font-size: 0.75rem;
+            text-align: right;
+        }
+
+        .billing-details-title__amount {
+            margin-left: 0.45em;
+            color: var(--accent-strong);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .billing-history-list {
+            display: grid;
+            gap: 9px;
+            min-height: 0;
+            max-height: min(480px, 52vh);
+            overflow: auto;
+            margin-top: 14px;
+            padding: 1px;
+        }
+
+        .billing-history-row {
+            display: grid;
+            grid-template-columns: minmax(132px, .75fr) minmax(0, 1.5fr) auto auto auto;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: color-mix(in srgb, var(--panel-strong) 54%, transparent);
+            color: var(--text);
+            padding: 12px 14px;
+            text-align: left;
+            transition: border-color .15s ease, background .15s ease, transform .15s ease;
+        }
+
+        .billing-history-row:hover {
+            border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+            background: color-mix(in srgb, var(--accent-light) 34%, var(--panel-strong));
+            transform: translateY(-1px);
+        }
+
+        .billing-history-row__date,
+        .billing-history-row__products {
+            min-width: 0;
+        }
+
+        .billing-history-row__date-label {
+            color: var(--text);
+            font-size: .82rem;
+            font-weight: 800;
+        }
+
+        .billing-history-row__date-value,
+        .billing-history-row__products,
+        .billing-history-row__count {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: .7rem;
+            line-height: 1.45;
+        }
+
+        .billing-history-row__products {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .billing-history-row__count {
+            white-space: nowrap;
+        }
+
+        .billing-history-row__amount {
+            color: var(--text);
+            font-size: .9rem;
+            font-weight: 850;
+            white-space: nowrap;
+        }
+
+        .billing-history-row__arrow {
+            color: var(--accent-strong);
+            font-size: .72rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .billing-details-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 5px;
+            border: 0;
+            background: transparent;
+            color: var(--accent-strong);
+            font-size: .72rem;
+            font-weight: 800;
+            padding: 0;
+        }
+
+        .billing-details-back:hover {
+            color: var(--accent);
+        }
+
+        .billing-details-scroll {
+            min-height: 0;
+            max-height: min(480px, 52vh);
+            overflow: auto;
+            margin-top: 14px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+        }
+
+        .billing-details-table {
+            width: 100%;
+            min-width: 620px;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        .billing-details-table th,
+        .billing-details-table td {
+            border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+            padding: 11px 13px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .billing-details-table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: var(--panel-strong);
+            color: var(--muted);
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: .04em;
+        }
+
+        .billing-details-table tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .billing-details-table__product {
+            color: var(--text);
+            font-weight: 750;
+        }
+
+        .billing-details-table__code,
+        .billing-details-table__instance {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 0.7rem;
+            overflow-wrap: anywhere;
+        }
+
+        .billing-details-table__amount {
+            color: var(--text);
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .billing-details-empty {
+            margin-top: 14px;
+            border: 1px dashed var(--line);
+            border-radius: 16px;
+            color: var(--muted);
+            padding: 32px 20px;
+            text-align: center;
+        }
+
+        @media (max-width: 600px) {
+            .billing-history-row {
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 5px 12px;
+                padding: 12px;
+            }
+
+            .billing-history-row__products {
+                grid-column: 1 / -1;
+                grid-row: 2;
+            }
+
+            .billing-history-row__count {
+                grid-column: 1;
+                grid-row: 3;
+            }
+
+            .billing-history-row__amount {
+                grid-column: 2;
+                grid-row: 3;
+            }
+
+            .billing-history-row__arrow {
+                display: none;
+            }
+
+            .billing-details-summary {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .billing-details-summary__meta {
+                text-align: left;
+            }
         }
 
         .tab-pill-group {
@@ -3979,6 +4248,7 @@
                                                     <span class="account-billing__value">{{ formatCurrencyValue(acc.billing.balance, acc.billing.currency) }}</span>
                                                 </div>
                                                 <div v-if="acc.billing.last_updated" class="account-billing__hint">{{ acc.billing.last_updated }} 更新</div>
+                                                <button @click.stop="openBillingDetails(acc)" class="account-billing__details-button">历史消费</button>
                                             </template>
                                             <div v-else-if="acc.billing && acc.billing.error" class="account-billing__error">{{ acc.billing.error }}</div>
                                             <div v-else class="account-billing__hint">未启用 费用中心</div>
@@ -4030,7 +4300,10 @@
                                             :style="{ width: Math.min(acc.usagePercent || 0, 100) + '%' }"></div>
                                     </div>
                                     <div v-if="hasTrafficIssue(acc)" class="text-xs text-[#dc2626]">{{ trafficIssueText(acc) }}</div>
-                                    <div v-if="acc.billing && acc.billing.enabled && !acc.billing.error">消费情况：本月消费 {{ formatCurrencyValue(acc.billing.monthly_cost, acc.billing.currency) }} / 余额 {{ formatCurrencyValue(acc.billing.balance, acc.billing.currency) }}</div>
+                                    <div v-if="acc.billing && acc.billing.enabled && !acc.billing.error">
+                                        <div>消费情况：本月消费 {{ formatCurrencyValue(acc.billing.monthly_cost, acc.billing.currency) }} / 余额 {{ formatCurrencyValue(acc.billing.balance, acc.billing.currency) }}</div>
+                                        <button @click="openBillingDetails(acc)" class="account-billing__details-button" style="margin-top: 8px;">查看历史消费</button>
+                                    </div>
                                     <div v-else-if="acc.billing && acc.billing.error" class="account-billing__error">{{ acc.billing.error }}</div>
                                     <div v-else class="account-billing__hint">消费情况：未启用 费用中心</div>
 	                                </div>
@@ -4744,6 +5017,83 @@
                     </button>
                     <button @click="saveAccountModal" class="solid-button" :disabled="savingAccountModal">
                         {{ savingAccountModal ? '保存中...' : '保存账号' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showBillingDetailsModal" class="account-modal-overlay" @click.self="closeBillingDetails">
+            <div class="glass-panel account-modal billing-modal">
+                <div class="section-head">
+                    <div>
+                        <p class="subtle-label">费用中心</p>
+                        <button v-if="selectedBillingDate" @click="backToBillingHistory" class="billing-details-back">← 返回历史消费</button>
+                        <h2 class="section-title">
+                            <template v-if="selectedBillingDate && selectedBillingDay">
+                                {{ formatBillingDate(selectedBillingDate) }}<span class="billing-details-title__amount">消费金额：{{ formatCurrencyValue(selectedBillingDay.total, billingDetails.currency) }}</span>
+                            </template>
+                            <template v-else>历史消费</template>
+                        </h2>
+                        <p class="mt-1 text-sm text-slate-500">{{ billingDetails.title }} · 云端账单可能存在延迟</p>
+                    </div>
+                    <button @click="closeBillingDetails" class="ghost-button compact-button">关闭</button>
+                </div>
+
+                <div v-if="!selectedBillingDate" class="billing-details-summary">
+                    <div>
+                        <div class="billing-details-summary__label">近 {{ billingDetails.days }} 日消费</div>
+                        <div class="billing-details-summary__value">{{ formatCurrencyValue(billingDetails.total, billingDetails.currency) }}</div>
+                    </div>
+                    <div class="billing-details-summary__meta">
+                        <div>{{ billingDetails.from }} 至 {{ billingDetails.to }}</div>
+                        <div v-if="billingDetails.last_updated">{{ billingDetails.last_updated }} 更新</div>
+                    </div>
+                </div>
+
+                <div v-if="billingDetailsLoading" class="billing-details-empty">正在查询阿里云账单...</div>
+                <div v-else-if="billingDetailsError" class="billing-details-empty text-red-600">{{ billingDetailsError }}</div>
+                <div v-else-if="billingDetails.items.length === 0" class="billing-details-empty">阿里云暂未返回这段时间的账单明细。</div>
+                <div v-else-if="!selectedBillingDate" class="billing-history-list">
+                    <button v-for="day in billingHistoryDays" :key="`billing-history-${day.date}`" class="billing-history-row" @click="openBillingDay(day.date)">
+                        <div class="billing-history-row__date">
+                            <div class="billing-history-row__date-label">{{ formatBillingDate(day.date) }}</div>
+                            <div class="billing-history-row__date-value">{{ day.date }}</div>
+                        </div>
+                        <div class="billing-history-row__products" :title="day.productSummary">{{ day.productSummary }}</div>
+                        <div class="billing-history-row__count">{{ day.count }} 项</div>
+                        <div class="billing-history-row__amount">{{ formatCurrencyValue(day.total, billingDetails.currency) }}</div>
+                        <div class="billing-history-row__arrow">查看 →</div>
+                    </button>
+                </div>
+                <div v-else class="billing-details-scroll">
+                    <table class="billing-details-table">
+                        <thead>
+                            <tr>
+                                <th>产品</th>
+                                <th>用量</th>
+                                <th>金额</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(item, index) in selectedBillingDay?.items || []" :key="`billing-detail-${selectedBillingDate}-${index}`">
+                                <td>
+                                    <div class="billing-details-table__product">{{ item.product_name }}</div>
+                                    <div v-if="item.product_code" class="billing-details-table__code">{{ item.product_code }}</div>
+                                    <div v-if="item.instance_id" class="billing-details-table__instance">实例：{{ item.instance_id }}</div>
+                                </td>
+                                <td>
+                                    <span v-if="item.usage">{{ item.usage }} {{ item.unit }}</span>
+                                    <span v-else>-</span>
+                                </td>
+                                <td class="billing-details-table__amount">{{ formatCurrencyValue(item.amount, item.currency || billingDetails.currency) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="top-action-row" style="justify-content: flex-end; margin-top: 18px;">
+                    <button @click="reloadBillingDetails" class="ghost-button" :disabled="billingDetailsLoading">
+                        {{ billingDetailsLoading ? '查询中...' : '刷新历史' }}
                     </button>
                 </div>
             </div>
@@ -5543,6 +5893,65 @@
                 const accountModalMode = ref('create');
                 const editingAccountIndex = ref(-1);
                 const accountDraft = ref(createDefaultAccount());
+                const showBillingDetailsModal = ref(false);
+                const billingDetailsLoading = ref(false);
+                const billingDetailsError = ref('');
+                const selectedBillingDate = ref('');
+                const billingDetails = ref({
+                    groupKey: '',
+                    title: '',
+                    days: 7,
+                    from: '',
+                    to: '',
+                    currency: 'CNY',
+                    total: 0,
+                    items: [],
+                    last_updated: ''
+                });
+
+                const billingHistoryDays = computed(() => {
+                    const grouped = new Map();
+                    (billingDetails.value.items || []).forEach((item) => {
+                        const date = item.date || '未知日期';
+                        if (!grouped.has(date)) {
+                            grouped.set(date, {
+                                date,
+                                count: 0,
+                                total: 0,
+                                products: [],
+                                items: []
+                            });
+                        }
+
+                        const day = grouped.get(date);
+                        const amount = Number(item.amount);
+                        day.count += 1;
+                        day.total += Number.isFinite(amount) ? amount : 0;
+                        day.items.push(item);
+                        const product = item.product_name || item.product_code || '其他费用';
+                        if (!day.products.includes(product)) {
+                            day.products.push(product);
+                        }
+                    });
+
+                    return Array.from(grouped.values())
+                        .map((day) => ({
+                            ...day,
+                            productSummary: day.products.length > 3
+                                ? `${day.products.slice(0, 3).join('、')} 等 ${day.products.length} 项`
+                                : day.products.join('、')
+                        }))
+                        .sort((left, right) => {
+                            if (left.date === '未知日期') return 1;
+                            if (right.date === '未知日期') return -1;
+                            return right.date.localeCompare(left.date);
+                        });
+                });
+
+                const selectedBillingDay = computed(() => {
+                    if (!selectedBillingDate.value) return null;
+                    return billingHistoryDays.value.find((day) => day.date === selectedBillingDate.value) || null;
+                });
                 const showCreateEcsModal = ref(false);
                 const ecsCreateDraft = ref(createDefaultEcsDraft());
                 const ecsCreatePreview = ref(null);
@@ -5622,6 +6031,10 @@
 
                     const symbol = currency === 'USD' ? '$' : currency === 'CNY' ? '¥' : `${currency} `;
                     return `${symbol}${amount.toFixed(2).replace(/\.00$/, '')}`;
+                };
+                const formatBillingDate = (value) => {
+                    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    return match ? `${match[1]}年${match[2]}月${match[3]}日` : (value || '未知日期');
                 };
                 const diskUnitText = (unit) => {
                     if (!unit || unit === 'GiB' || unit === 'GB') return 'GB';
@@ -6702,6 +7115,75 @@
                     accountDraft.value = createDefaultAccount();
                 };
 
+                const loadBillingDetails = async () => {
+                    const groupKey = billingDetails.value.groupKey;
+                    if (!groupKey) return;
+                    billingDetailsLoading.value = true;
+                    billingDetailsError.value = '';
+                    try {
+                        const res = await fetch('index.php?action=get_bill_details', {
+                            method: 'POST',
+                            body: JSON.stringify({ group_key: groupKey, days: billingDetails.value.days })
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.success) {
+                            throw new Error(data.message || '账单明细查询失败');
+                        }
+                        const payload = data.data || {};
+                        billingDetails.value = {
+                            ...billingDetails.value,
+                            ...payload,
+                            items: Array.isArray(payload.items) ? payload.items : []
+                        };
+                    } catch (error) {
+                        console.error('Load billing details failed', error);
+                        billingDetailsError.value = error.message || '账单明细查询失败，请稍后重试';
+                    } finally {
+                        billingDetailsLoading.value = false;
+                    }
+                };
+
+                const openBillingDetails = async (account) => {
+                    if (!account?.groupKey) {
+                        openAlert('当前账号暂时无法查询账单明细', 'error');
+                        return;
+                    }
+                    selectedBillingDate.value = '';
+                    billingDetails.value = {
+                        groupKey: account.groupKey,
+                        title: account.remark || '未命名账号',
+                        days: 7,
+                        from: '',
+                        to: '',
+                        currency: account.billing?.currency || 'CNY',
+                        total: 0,
+                        items: [],
+                        last_updated: ''
+                    };
+                    billingDetailsError.value = '';
+                    showBillingDetailsModal.value = true;
+                    await loadBillingDetails();
+                };
+
+                const openBillingDay = (date) => {
+                    if (billingHistoryDays.value.some((day) => day.date === date)) {
+                        selectedBillingDate.value = date;
+                    }
+                };
+
+                const backToBillingHistory = () => {
+                    selectedBillingDate.value = '';
+                };
+
+                const reloadBillingDetails = () => loadBillingDetails();
+
+                const closeBillingDetails = () => {
+                    showBillingDetailsModal.value = false;
+                    selectedBillingDate.value = '';
+                    billingDetailsLoading.value = false;
+                    billingDetailsError.value = '';
+                };
+
                 const validateAccountDraft = () => {
                     const draft = accountDraft.value;
                     if (!draft.remark || !draft.AccessKeyId || !draft.AccessKeySecret || !draft.regionId || !draft.maxTraffic) {
@@ -7467,6 +7949,13 @@
                     accountDraft,
                     accountDraftTestResult,
                     accountModalMode,
+                    billingDetails,
+                    billingHistoryDays,
+                    billingDetailsError,
+                    billingDetailsLoading,
+                    selectedBillingDate,
+                    selectedBillingDay,
+                    showBillingDetailsModal,
                     accountSyncResults,
                     accountSyncStates,
                     fetchingAllInstances,
@@ -7522,7 +8011,9 @@
                     startingUpdate,
                     checkingLogin,
                     closeAccountModal,
+                    closeBillingDetails,
                     dialogState,
+                    formatBillingDate,
                     formatCurrencyValue,
                     formatInstanceSpec,
                     formatPercent,
@@ -7542,6 +8033,9 @@
                     buildCredentialCopyText,
                     resolveDialog,
                     openCreateAccountModal,
+                    openBillingDay,
+                    openBillingDetails,
+                    backToBillingHistory,
                     openEditAccountModal,
                     openCreateEcsModal,
                     closeCreateEcsModal,
@@ -7582,7 +8076,8 @@
                     checkForUpdates,
                     handleUpdateAction,
                     startOnlineUpdate,
-                    updatePhaseText
+                    updatePhaseText,
+                    reloadBillingDetails
                 };
             }
         }).mount('#app');

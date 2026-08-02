@@ -485,6 +485,74 @@ func (f *fakeSyncClient) DescribeInstances(context.Context, string) ([]cloud.Ins
 	return f.instances, nil
 }
 
+type fakeBillingDetailsClient struct {
+	cloud.Client
+	details []cloud.BillingDetail
+	calls   int
+}
+
+func (f *fakeBillingDetailsClient) GetBillingDetails(context.Context, string, string, string) ([]cloud.BillingDetail, error) {
+	f.calls++
+	return f.details, nil
+}
+
+func TestBillDetailsFiltersRecentItemsAndCachesResult(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.SetSetting("enable_billing", "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveGroups([]app.AccountGroup{{GroupKey: "group-billing", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", SiteType: "china"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAccount(app.Account{ID: 7, AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", SiteType: "china", GroupKey: "group-billing", InstanceID: "i-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	fake := &fakeBillingDetailsClient{details: []cloud.BillingDetail{
+		{Date: now.Format("2006-01-02"), ProductName: "云服务器 ECS", Amount: 1.25, Currency: "CNY"},
+		{Date: now.AddDate(0, 0, -20).Format("2006-01-02"), ProductName: "云盘", Amount: 0.10, Currency: "CNY"},
+	}}
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client { return fake }
+	body := strings.NewReader(`{"group_key":"group-billing","days":1}`)
+	req := httptest.NewRequest(http.MethodPost, "/index.php?action=get_bill_details", body)
+	recorder := httptest.NewRecorder()
+	srv.billDetails(recorder, req, map[string]any{"group_key": "group-billing", "days": 1})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("bill details status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Data struct {
+			Items []cloud.BillingDetail `json:"items"`
+			Total float64               `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Data.Items) != 1 || response.Data.Items[0].ProductName != "云服务器 ECS" || response.Data.Total != 1.25 {
+		t.Fatalf("unexpected filtered details: %#v", response.Data)
+	}
+
+	recorder = httptest.NewRecorder()
+	srv.billDetails(recorder, req, map[string]any{"group_key": "group-billing", "days": 1})
+	if recorder.Code != http.StatusOK || fake.calls != 1 {
+		t.Fatalf("cached bill details status=%d calls=%d", recorder.Code, fake.calls)
+	}
+}
+
+func TestBillingDatesIncludesPreviousMonth(t *testing.T) {
+	dates := billingDates("2026-07-27", "2026-08-02")
+	if len(dates) != 7 || dates[0] != "2026-07-27" || dates[6] != "2026-08-02" {
+		t.Fatalf("unexpected billing dates: %#v", dates)
+	}
+}
+
 func TestSyncGroupPreservesReleaseAndQueuesMissingInstances(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {

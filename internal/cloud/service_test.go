@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"sync"
 	"testing"
 )
 
@@ -201,5 +203,69 @@ func TestInstanceFromMapSupportsCurrentECSFieldsAndNestedIPs(t *testing.T) {
 func TestHongKongCountsAsOverseasCDTRegion(t *testing.T) {
 	if !overseasRegion("cn-hongkong") || overseasRegion("cn-shanghai") || !overseasRegion("ap-southeast-1") {
 		t.Fatal("CDT region classification is incorrect")
+	}
+}
+
+func TestGetBillingDetailsUsesDailyInstanceBill(t *testing.T) {
+	var mu sync.Mutex
+	requests := make([]url.Values, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests = append(requests, r.URL.Query())
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]any{
+			"Code": "Success",
+			"Data": map[string]any{
+				"Items": map[string]any{
+					"Item": []map[string]any{{
+						"BillingDate":   "2026-08-01",
+						"ProductName":   "云服务器 ECS",
+						"ProductCode":   "ecs",
+						"PretaxAmount":  "1.25",
+						"Currency":      "CNY",
+						"InstanceID":    "i-1",
+						"InstanceSpec":  "ecs.test",
+						"ServicePeriod": "86400",
+					}},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	service := &Service{BSS: &RPCClient{
+		Endpoint:   server.URL,
+		Version:    "2017-12-14",
+		Product:    "BssOpenApi",
+		AccessKey:  "ak",
+		Secret:     "secret",
+		HTTPClient: server.Client(),
+	}}
+	details, err := service.GetBillingDetails(context.Background(), "china", "2026-08", "2026-08-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(details) != 1 || details[0].Date != "2026-08-01" || details[0].Amount != 1.25 {
+		t.Fatalf("unexpected billing details: %#v", details)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(requests) != 1 {
+		t.Fatalf("billing API calls=%d, want 1", len(requests))
+	}
+	if got := requests[0].Get("Action"); got != "QueryInstanceBill" {
+		t.Fatalf("action=%q, want QueryInstanceBill", got)
+	}
+	if got := requests[0].Get("Granularity"); got != "DAILY" {
+		t.Fatalf("granularity=%q, want DAILY", got)
+	}
+	if got := requests[0].Get("BillingCycle"); got != "2026-08" {
+		t.Fatalf("billing cycle=%q", got)
+	}
+	if got := requests[0].Get("BillingDate"); got != "2026-08-01" {
+		t.Fatalf("billing date=%q", got)
 	}
 }

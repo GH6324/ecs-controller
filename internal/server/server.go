@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -255,6 +256,8 @@ func (s *Server) authenticatedAction(w http.ResponseWriter, r *http.Request, act
 			return
 		}
 		s.json(w, 200, map[string]any{"data": history})
+	case "get_bill_details":
+		s.billDetails(w, r, data)
 	case "logout":
 		s.logout(w, r)
 	case "get_all_instances":
@@ -440,6 +443,191 @@ func (s *Server) getCachedCDTTraffic(group app.AccountGroup, accountID int64, cy
 	}
 	_ = s.Store.SetBillingCache(accountID, "cdt_traffic", cycle, map[string]any{"traffic": traffic})
 	return traffic, true
+}
+
+func (s *Server) billDetails(w http.ResponseWriter, r *http.Request, data map[string]any) {
+	const billingDetailCacheType = "bill_details_v4"
+	if s.Store.GetSetting("enable_billing", "0") != "1" {
+		s.error(w, http.StatusBadRequest, "请先在系统设置中开启费用中心")
+		return
+	}
+	groupKey := stringValue(data["group_key"])
+	if groupKey == "" {
+		s.error(w, http.StatusBadRequest, "缺少账号组")
+		return
+	}
+
+	now := time.Now()
+	cycle := stringValue(data["billing_cycle"])
+	if _, err := time.Parse("2006-01", cycle); err != nil {
+		cycle = now.Format("2006-01")
+	}
+	days := number(data["days"], 7)
+	if days < 1 {
+		days = 1
+	}
+	if days > 31 {
+		days = 31
+	}
+	from := now.AddDate(0, 0, -(days - 1)).Format("2006-01-02")
+	to := now.Format("2006-01-02")
+	dates := billingDates(from, to)
+
+	groups, err := s.Store.LoadGroups()
+	if err != nil {
+		s.error(w, http.StatusInternalServerError, "账号组读取失败")
+		return
+	}
+	accounts, err := s.Store.LoadAccounts(false)
+	if err != nil {
+		s.error(w, http.StatusInternalServerError, "账号读取失败")
+		return
+	}
+	group := app.AccountGroup{GroupKey: groupKey}
+	for _, candidate := range groups {
+		if candidate.GroupKey == groupKey {
+			group = candidate
+			break
+		}
+	}
+	groupAccounts := make([]app.Account, 0)
+	for _, account := range accounts {
+		if account.GroupKey == groupKey && account.InstanceID != "" {
+			groupAccounts = append(groupAccounts, account)
+		}
+	}
+	if len(groupAccounts) == 0 {
+		s.error(w, http.StatusNotFound, "账号组下没有可查询账单的实例")
+		return
+	}
+	if group.AccessKeyID == "" {
+		group.AccessKeyID = groupAccounts[0].AccessKeyID
+		group.AccessKeySecret = groupAccounts[0].AccessKeySecret
+		group.RegionID = groupAccounts[0].RegionID
+		group.SiteType = groupAccounts[0].SiteType
+	}
+
+	client := s.Cloud
+	if s.CloudFactory != nil {
+		client = s.CloudFactory(app.Account{
+			AccessKeyID:     group.AccessKeyID,
+			AccessKeySecret: group.AccessKeySecret,
+			RegionID:        group.RegionID,
+			SiteType:        group.SiteType,
+		})
+	}
+	detailClient, ok := client.(cloud.BillingDetailClient)
+	if !ok {
+		s.error(w, http.StatusServiceUnavailable, "当前云客户端不支持账单明细")
+		return
+	}
+
+	items := make([]cloud.BillingDetail, 0)
+	currency := "CNY"
+	if group.SiteType == "international" {
+		currency = "USD"
+	}
+	lastUpdated := ""
+	cacheAccountID := groupAccounts[0].ID
+	for _, billDate := range dates {
+		billCycle := billDate[:7]
+		var details []cloud.BillingDetail
+		cached, cacheOK := s.Store.GetBillingCache(cacheAccountID, billingDetailCacheType, billDate, 6*time.Hour)
+		if cacheOK {
+			details, err = decodeBillingDetails(cached["items"])
+			if err != nil {
+				cacheOK = false
+			}
+		}
+		if cacheOK {
+			if cachedCurrency := stringValue(cached["currency"]); cachedCurrency != "" {
+				currency = cachedCurrency
+			}
+			lastUpdated = laterTimestamp(lastUpdated, stringValue(cached["updated_at"]))
+		} else {
+			details, err = detailClient.GetBillingDetails(r.Context(), group.SiteType, billCycle, billDate)
+			if err != nil {
+				s.error(w, http.StatusBadRequest, "账单明细查询失败: "+err.Error())
+				return
+			}
+			if len(details) > 0 && details[0].Currency != "" {
+				currency = details[0].Currency
+			}
+			updatedAt := time.Now().Format("2006-01-02 15:04:05")
+			_ = s.Store.SetBillingCache(cacheAccountID, billingDetailCacheType, billDate, map[string]any{
+				"items":      details,
+				"currency":   currency,
+				"updated_at": updatedAt,
+			})
+			lastUpdated = laterTimestamp(lastUpdated, updatedAt)
+		}
+		for _, detail := range details {
+			if detail.Date == "" || (detail.Date >= from && detail.Date <= to) {
+				items = append(items, detail)
+			}
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Date == items[j].Date {
+			return items[i].ProductName < items[j].ProductName
+		}
+		return items[i].Date > items[j].Date
+	})
+	total := 0.0
+	for _, item := range items {
+		total += item.Amount
+		if item.Currency != "" {
+			currency = item.Currency
+		}
+	}
+	s.json(w, http.StatusOK, map[string]any{
+		"success": true,
+		"data": map[string]any{
+			"billing_cycle": cycle,
+			"from":          from,
+			"to":            to,
+			"days":          days,
+			"currency":      currency,
+			"total":         total,
+			"items":         items,
+			"last_updated":  lastUpdated,
+		},
+	})
+}
+
+func billingDates(from, to string) []string {
+	start, startErr := time.ParseInLocation("2006-01-02", from, time.Local)
+	end, endErr := time.ParseInLocation("2006-01-02", to, time.Local)
+	if startErr != nil || endErr != nil || start.After(end) {
+		return nil
+	}
+	dates := make([]string, 0, int(end.Sub(start).Hours()/24)+1)
+	for current := start; !current.After(end); current = current.AddDate(0, 0, 1) {
+		dates = append(dates, current.Format("2006-01-02"))
+	}
+	return dates
+}
+
+func decodeBillingDetails(value any) ([]cloud.BillingDetail, error) {
+	if value == nil {
+		return []cloud.BillingDetail{}, nil
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var details []cloud.BillingDetail
+	if err := json.Unmarshal(raw, &details); err != nil {
+		return nil, err
+	}
+	return details, nil
+}
+
+func laterTimestamp(current, candidate string) string {
+	if current == "" || candidate > current {
+		return candidate
+	}
+	return current
 }
 
 func (s *Server) status(w http.ResponseWriter) {

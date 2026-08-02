@@ -553,6 +553,32 @@ func TestBillingDatesIncludesPreviousMonth(t *testing.T) {
 	}
 }
 
+func TestEnrichBillingDetailsAddsCurrentResourceWithoutChangingBillValues(t *testing.T) {
+	items := []cloud.BillingDetail{{
+		InstanceID: "eip-1",
+		Usage:      22,
+		Amount:     0.01,
+	}}
+	enrichBillingDetails(items, map[string]cloud.BillingResource{
+		"eip-1": {
+			InstanceID: "i-1",
+			EIP: &cloud.BillingEIP{
+				AllocationID: "eip-1",
+				Status:       "InUse",
+				Bandwidth:    200,
+				Count:        1,
+			},
+		},
+	})
+
+	if items[0].CurrentResource == nil || items[0].CurrentResource.EIP == nil || items[0].CurrentResource.EIP.Bandwidth != 200 {
+		t.Fatalf("current resource not attached: %#v", items[0])
+	}
+	if items[0].Usage != 22 || items[0].Amount != 0.01 {
+		t.Fatalf("billing values changed during enrichment: %#v", items[0])
+	}
+}
+
 func TestSyncGroupPreservesReleaseAndQueuesMissingInstances(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {

@@ -446,7 +446,7 @@ func (s *Server) getCachedCDTTraffic(group app.AccountGroup, accountID int64, cy
 }
 
 func (s *Server) billDetails(w http.ResponseWriter, r *http.Request, data map[string]any) {
-	const billingDetailCacheType = "bill_details_v7"
+	const billingDetailCacheType = "bill_details_v8"
 	if s.Store.GetSetting("enable_billing", "0") != "1" {
 		s.error(w, http.StatusBadRequest, "请先在系统设置中开启费用中心")
 		return
@@ -567,6 +567,19 @@ func (s *Server) billDetails(w http.ResponseWriter, r *http.Request, data map[st
 			}
 		}
 	}
+	if len(items) > 0 {
+		if resourceClient, ok := client.(cloud.BillingResourceClient); ok {
+			instanceIDs := make([]string, 0, len(groupAccounts))
+			for _, account := range groupAccounts {
+				instanceIDs = append(instanceIDs, account.InstanceID)
+			}
+			resources, resourceErr := resourceClient.DescribeBillingResources(r.Context(), group.RegionID, instanceIDs)
+			if resourceErr != nil && s.Log != nil {
+				s.Log.Printf("费用中心当前资源补充失败: %v", resourceErr)
+			}
+			enrichBillingDetails(items, resources)
+		}
+	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Date == items[j].Date {
 			return items[i].ProductName < items[j].ProductName
@@ -621,6 +634,17 @@ func decodeBillingDetails(value any) ([]cloud.BillingDetail, error) {
 		return nil, err
 	}
 	return details, nil
+}
+
+func enrichBillingDetails(items []cloud.BillingDetail, resources map[string]cloud.BillingResource) {
+	for index := range items {
+		resource, ok := resources[items[index].InstanceID]
+		if !ok {
+			continue
+		}
+		resourceCopy := resource
+		items[index].CurrentResource = &resourceCopy
+	}
 }
 
 func laterTimestamp(current, candidate string) string {

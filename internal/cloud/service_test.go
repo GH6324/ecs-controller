@@ -406,3 +406,55 @@ func TestGetBillingDetailsUsesInstanceBillWhenSplitBillIsUnavailable(t *testing.
 		t.Fatalf("unexpected fallback actions: %#v", actions)
 	}
 }
+
+func TestBillingDetailPreservesConfigurationAndServicePeriod(t *testing.T) {
+	detail := billingDetailFromMap(map[string]any{
+		"BillingDate":       "2026-08-02",
+		"ProductName":       "云服务器 ECS",
+		"BillingItem":       "系统盘大小",
+		"Usage":             "50",
+		"UsageUnit":         "GiB",
+		"InstanceConfig":    "系统盘：2 GiB",
+		"ServicePeriod":     "86400",
+		"ServicePeriodUnit": "秒",
+	}, "", "CNY", "2026-08-02")
+
+	if detail.InstanceConfig != "系统盘：2 GiB" || detail.ServicePeriod != 86400 || detail.ServicePeriodUnit != "秒" {
+		t.Fatalf("billing metadata was lost: %#v", detail)
+	}
+}
+
+func TestDescribeBillingResourcesMapsSystemDiskAndEIP(t *testing.T) {
+	requests := make([]url.Values, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		requests = append(requests, query)
+		w.Header().Set("Content-Type", "application/json")
+		switch query.Get("Action") {
+		case "DescribeDisks":
+			_ = json.NewEncoder(w).Encode(map[string]any{"Disks": map[string]any{"Disk": []map[string]any{{"Type": "system", "Size": 2, "Category": "cloud_auto", "Status": "In_use"}}}})
+		case "DescribeEipAddresses":
+			_ = json.NewEncoder(w).Encode(map[string]any{"EipAddresses": map[string]any{"EipAddress": []map[string]any{{"AllocationId": "eip-1", "Status": "InUse", "Bandwidth": "200"}}}})
+		default:
+			t.Fatalf("unexpected action: %s", query.Get("Action"))
+		}
+	}))
+	defer server.Close()
+
+	client := &RPCClient{HTTPClient: server.Client(), Endpoint: server.URL, Version: "2014-05-26", Product: "Ecs", AccessKey: "ak", Secret: "sk"}
+	resources, err := (&Service{ECS: client, EIP: client}).DescribeBillingResources(context.Background(), "cn-hongkong", []string{"i-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := resources["i-1"]
+	if instance.SystemDisk == nil || instance.SystemDisk.Size != 2 || instance.SystemDisk.Category != "cloud_auto" {
+		t.Fatalf("unexpected system disk: %#v", instance)
+	}
+	eip := resources["eip-1"]
+	if eip.EIP == nil || eip.EIP.Count != 1 || eip.EIP.Bandwidth != 200 || eip.EIP.Status != "InUse" {
+		t.Fatalf("unexpected eip: %#v", eip)
+	}
+	if len(requests) != 2 || requests[0].Get("InstanceId") != "i-1" || requests[1].Get("InstanceId") != "i-1" || requests[1].Get("InstanceType") != "EcsInstance" {
+		t.Fatalf("unexpected resource lookup requests: %#v", requests)
+	}
+}

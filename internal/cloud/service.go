@@ -68,25 +68,56 @@ type BillingClient interface {
 }
 
 type BillingDetail struct {
-	Date             string  `json:"date"`
-	ProductName      string  `json:"product_name"`
-	ProductCode      string  `json:"product_code,omitempty"`
-	ProductDetail    string  `json:"product_detail,omitempty"`
-	BillingItem      string  `json:"billing_item,omitempty"`
-	BillingItemCode  string  `json:"billing_item_code,omitempty"`
-	BillingType      string  `json:"billing_type,omitempty"`
-	SubscriptionType string  `json:"subscription_type,omitempty"`
-	InstanceID       string  `json:"instance_id,omitempty"`
-	Amount           float64 `json:"amount"`
-	Currency         string  `json:"currency"`
-	Usage            float64 `json:"usage,omitempty"`
-	Unit             string  `json:"unit,omitempty"`
+	Date              string           `json:"date"`
+	ProductName       string           `json:"product_name"`
+	ProductCode       string           `json:"product_code,omitempty"`
+	ProductDetail     string           `json:"product_detail,omitempty"`
+	BillingItem       string           `json:"billing_item,omitempty"`
+	BillingItemCode   string           `json:"billing_item_code,omitempty"`
+	BillingType       string           `json:"billing_type,omitempty"`
+	SubscriptionType  string           `json:"subscription_type,omitempty"`
+	InstanceID        string           `json:"instance_id,omitempty"`
+	Amount            float64          `json:"amount"`
+	Currency          string           `json:"currency"`
+	Usage             float64          `json:"usage,omitempty"`
+	Unit              string           `json:"unit,omitempty"`
+	InstanceConfig    string           `json:"instance_config,omitempty"`
+	ServicePeriod     int64            `json:"service_period_seconds,omitempty"`
+	ServicePeriodUnit string           `json:"service_period_unit,omitempty"`
+	CurrentResource   *BillingResource `json:"current_resource,omitempty"`
+}
+
+// BillingResource is a current resource snapshot used to put a historical bill
+// line in context. It is deliberately kept separate from the bill cache.
+type BillingResource struct {
+	InstanceID string             `json:"instance_id,omitempty"`
+	SystemDisk *BillingSystemDisk `json:"system_disk,omitempty"`
+	EIP        *BillingEIP        `json:"eip,omitempty"`
+}
+
+type BillingSystemDisk struct {
+	Size     int    `json:"size_gib,omitempty"`
+	Category string `json:"category,omitempty"`
+	Status   string `json:"status,omitempty"`
+}
+
+type BillingEIP struct {
+	AllocationID string `json:"allocation_id,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Bandwidth    int    `json:"bandwidth_mbps,omitempty"`
+	Count        int    `json:"count,omitempty"`
 }
 
 // BillingDetailClient is optional so existing lightweight cloud fakes do not
 // need to implement the detail endpoint used only by the billing modal.
 type BillingDetailClient interface {
 	GetBillingDetails(context.Context, string, string, string) ([]BillingDetail, error)
+}
+
+// BillingResourceClient is optional. It provides current disk and EIP details
+// without making an unavailable inventory API block historical billing data.
+type BillingResourceClient interface {
+	DescribeBillingResources(context.Context, string, []string) (map[string]BillingResource, error)
 }
 
 // MonthlyTrafficClient queries the current month's instance traffic directly
@@ -279,6 +310,87 @@ func (s *Service) DescribeInstance(ctx context.Context, region, id string) (*Ins
 	}
 	v := instanceFromMap(items[0])
 	return &v, nil
+}
+
+func (s *Service) DescribeBillingResources(ctx context.Context, region string, instanceIDs []string) (map[string]BillingResource, error) {
+	resources := make(map[string]BillingResource, len(instanceIDs))
+	seen := make(map[string]struct{}, len(instanceIDs))
+	failures := make([]string, 0)
+
+	for _, instanceID := range instanceIDs {
+		instanceID = strings.TrimSpace(instanceID)
+		if instanceID == "" {
+			continue
+		}
+		if _, ok := seen[instanceID]; ok {
+			continue
+		}
+		seen[instanceID] = struct{}{}
+
+		resource := BillingResource{InstanceID: instanceID}
+		disks, diskErr := s.ECS.Call(ctx, "DescribeDisks", map[string]string{
+			"RegionId":   region,
+			"InstanceId": instanceID,
+			"MaxResults": "100",
+		})
+		if diskErr != nil {
+			failures = append(failures, "DescribeDisks: "+diskErr.Error())
+		} else {
+			for _, disk := range mapsAt(disks, "Disks.Disk") {
+				if !strings.EqualFold(stringValue(disk["Type"]), "system") {
+					continue
+				}
+				resource.SystemDisk = &BillingSystemDisk{
+					Size:     intValue(disk["Size"]),
+					Category: stringValue(disk["Category"]),
+					Status:   stringValue(disk["Status"]),
+				}
+				break
+			}
+		}
+
+		eips, eipErr := s.EIP.Call(ctx, "DescribeEipAddresses", map[string]string{
+			"RegionId":     region,
+			"InstanceId":   instanceID,
+			"InstanceType": "EcsInstance",
+			"MaxResults":   "100",
+		})
+		if eipErr != nil {
+			failures = append(failures, "DescribeEipAddresses: "+eipErr.Error())
+		} else {
+			eipItems := mapsAt(eips, "EipAddresses.EipAddress")
+			if len(eipItems) > 0 {
+				first := eipItems[0]
+				resource.EIP = &BillingEIP{
+					AllocationID: stringValue(first["AllocationId"]),
+					Status:       stringValue(first["Status"]),
+					Bandwidth:    intValue(first["Bandwidth"]),
+					Count:        len(eipItems),
+				}
+			}
+			for _, eip := range eipItems {
+				allocationID := stringValue(eip["AllocationId"])
+				if allocationID == "" {
+					continue
+				}
+				resources[allocationID] = BillingResource{
+					InstanceID: instanceID,
+					EIP: &BillingEIP{
+						AllocationID: allocationID,
+						Status:       stringValue(eip["Status"]),
+						Bandwidth:    intValue(eip["Bandwidth"]),
+						Count:        1,
+					},
+				}
+			}
+		}
+		resources[instanceID] = resource
+	}
+
+	if len(failures) > 0 {
+		return resources, fmt.Errorf("current billing resource lookup: %s", strings.Join(failures, "; "))
+	}
+	return resources, nil
 }
 
 func (s *Service) StartInstance(ctx context.Context, region, id string) error {
@@ -535,19 +647,22 @@ func billingDetailFromMap(item map[string]any, fallbackInstanceID, fallbackCurre
 		date = fallbackDate
 	}
 	return BillingDetail{
-		Date:             date,
-		ProductName:      productName,
-		ProductCode:      productCode,
-		ProductDetail:    productDetail,
-		BillingItem:      billingItem,
-		BillingItemCode:  billingItemCode,
-		BillingType:      billingType,
-		SubscriptionType: subscriptionType,
-		InstanceID:       instanceID,
-		Amount:           amount,
-		Currency:         currency,
-		Usage:            usage,
-		Unit:             firstString(item, "Unit", "UsageUnit"),
+		Date:              date,
+		ProductName:       productName,
+		ProductCode:       productCode,
+		ProductDetail:     productDetail,
+		BillingItem:       billingItem,
+		BillingItemCode:   billingItemCode,
+		BillingType:       billingType,
+		SubscriptionType:  subscriptionType,
+		InstanceID:        instanceID,
+		Amount:            amount,
+		Currency:          currency,
+		Usage:             usage,
+		Unit:              firstString(item, "Unit", "UsageUnit"),
+		InstanceConfig:    firstString(item, "InstanceConfig"),
+		ServicePeriod:     int64(floatValue(item["ServicePeriod"])),
+		ServicePeriodUnit: firstString(item, "ServicePeriodUnit"),
 	}
 }
 

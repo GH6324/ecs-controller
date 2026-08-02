@@ -1796,11 +1796,41 @@
             margin-top: 14px;
             border: 1px solid var(--line);
             border-radius: 16px;
+            scrollbar-width: thin;
+            scrollbar-color: color-mix(in srgb, var(--muted) 62%, var(--panel-strong)) color-mix(in srgb, var(--panel-strong) 88%, var(--panel));
+            scrollbar-gutter: stable;
+        }
+
+        .billing-details-scroll::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        .billing-details-scroll::-webkit-scrollbar-track {
+            background: color-mix(in srgb, var(--panel-strong) 88%, var(--panel));
+            border-left: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+        }
+
+        .billing-details-scroll::-webkit-scrollbar-thumb {
+            min-height: 44px;
+            border: 3px solid transparent;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--muted) 62%, var(--panel-strong));
+            background-clip: padding-box;
+            transition: background-color .15s ease;
+        }
+
+        .billing-details-scroll::-webkit-scrollbar-thumb:hover {
+            background-color: color-mix(in srgb, var(--accent) 66%, var(--muted));
+        }
+
+        .billing-details-scroll::-webkit-scrollbar-thumb:active {
+            background-color: var(--accent);
         }
 
         .billing-details-table {
             width: 100%;
-            min-width: 620px;
+            min-width: 680px;
             border-collapse: collapse;
             font-size: 0.8rem;
         }
@@ -1852,6 +1882,30 @@
             color: var(--text);
             font-weight: 800;
             white-space: nowrap;
+        }
+
+        .billing-details-table__usage {
+            min-width: 230px;
+        }
+
+        .billing-details-table__usage-main {
+            color: var(--text);
+            font-weight: 750;
+        }
+
+        .billing-details-table__usage-current,
+        .billing-details-table__usage-billing,
+        .billing-details-table__usage-config {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 0.72rem;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
+        .billing-details-table__usage-current {
+            color: var(--accent-strong);
+            font-weight: 700;
         }
 
         .billing-details-empty {
@@ -5076,8 +5130,8 @@
                     <table class="billing-details-table">
                         <thead>
                             <tr>
-                                <th>产品 / 计费项目</th>
-                                <th title="阿里云按计费周期汇总的用量，不等同于实际流量或资源容量">账单计费用量</th>
+                                <th>计费项目</th>
+                                <th title="账单累计用量与当前资源配置分开呈现，避免将计费单位误认为容量或数量">计费口径</th>
                                 <th>金额</th>
                             </tr>
                         </thead>
@@ -5087,12 +5141,13 @@
                                     <div class="billing-details-table__product">{{ item.product_name }}</div>
                                     <div v-if="item.billing_item" class="billing-details-table__item">计费项目：{{ item.billing_item }}</div>
                                     <div v-if="item.product_detail && item.product_detail !== item.product_name" class="billing-details-table__code">明细：{{ item.product_detail }}</div>
-                                    <div v-if="item.product_code" class="billing-details-table__code">{{ item.product_code }}</div>
-                                    <div v-if="item.instance_id" class="billing-details-table__instance">实例：{{ item.instance_id }}</div>
+                                    <div v-if="item.instance_id" class="billing-details-table__instance">账单资源：{{ item.instance_id }}</div>
                                 </td>
-                                <td>
-                                    <span v-if="item.usage">{{ item.usage }} {{ item.unit }}</span>
-                                    <span v-else>-</span>
+                                <td class="billing-details-table__usage">
+                                    <div class="billing-details-table__usage-main">{{ billingUsagePresentation(item).primary }}</div>
+                                    <div v-if="billingUsagePresentation(item).current" class="billing-details-table__usage-current">{{ billingUsagePresentation(item).current }}</div>
+                                    <div v-if="billingUsagePresentation(item).billing" class="billing-details-table__usage-billing">{{ billingUsagePresentation(item).billing }}</div>
+                                    <div v-if="billingUsagePresentation(item).config" class="billing-details-table__usage-config">{{ billingUsagePresentation(item).config }}</div>
                                 </td>
                                 <td class="billing-details-table__amount">{{ formatCurrencyValue(item.amount, item.currency || billingDetails.currency) }}</td>
                             </tr>
@@ -5999,6 +6054,144 @@
 
                 const getSiteTypeLabel = (siteType) => siteType === 'international' ? '国际站' : '中国站';
                 const formatTrafficUsage = (value) => Number(value || 0).toFixed(2).replace(/\.00$/, '');
+                const formatBillingNumber = (value) => {
+                    const number = Number(value);
+                    if (!Number.isFinite(number)) return '';
+                    return number.toLocaleString('zh-CN', { maximumFractionDigits: 6 });
+                };
+                const formatBillingMetric = (item) => {
+                    const value = formatBillingNumber(item?.usage);
+                    if (!value) return '';
+                    return [value, item?.unit].filter(Boolean).join(' ');
+                };
+                const billingItemKind = (item) => {
+                    const text = [item?.product_name, item?.product_code, item?.product_detail, item?.billing_item, item?.billing_item_code]
+                        .filter(Boolean)
+                        .join(' ')
+                        .toLowerCase();
+                    if (text.includes('imageos')) return 'imageos';
+                    if (text.includes('系统盘') || text.includes('systemdisk')) return 'system-disk';
+                    if (text.includes('公网ip保有') || text.includes('eip保有') || (text.includes('弹性公网ip') && text.includes('保有'))) return 'eip-holding';
+                    if (text.includes('出方向流量') || text.includes('outbound traffic')) return 'traffic';
+                    if (text.includes('云服务器配置') || text.includes('instance configuration')) return 'instance-configuration';
+                    return 'generic';
+                };
+                const formatCurrentResourceStatus = (value) => {
+                    const status = String(value || '').trim();
+                    return status.toLowerCase() === 'in_use' ? 'InUse' : status;
+                };
+                const billingConfigPairs = (value) => String(value || '')
+                    .split(/[;；]/)
+                    .map((part) => {
+                        const separator = part.includes('：') ? '：' : ':';
+                        const index = part.indexOf(separator);
+                        return index > 0 ? {
+                            key: part.slice(0, index).trim(),
+                            value: part.slice(index + separator.length).trim()
+                        } : null;
+                    })
+                    .filter((part) => part?.key && part?.value && part.value !== '-');
+                const billingConfigValue = (pairs, ...keys) => {
+                    const pair = pairs.find((candidate) => keys.includes(candidate.key))
+                        || pairs.find((candidate) => keys.some((key) => candidate.key.includes(key)));
+                    return pair?.value || '';
+                };
+                const billingConfigSummary = (item, kind) => {
+                    const pairs = billingConfigPairs(item?.instance_config);
+                    if (pairs.length === 0 || kind === 'traffic') return '';
+
+                    if (kind === 'system-disk') {
+                        const size = billingConfigValue(pairs, '系统盘大小');
+                        const category = billingConfigValue(pairs, '系统盘种类');
+                        const parts = [size, category].filter(Boolean);
+                        return parts.length > 0 ? `账单配置：${parts.join(' · ')}` : '';
+                    }
+
+                    if (kind === 'instance-configuration' || kind === 'imageos') {
+                        const spec = billingConfigValue(pairs, '实例规格');
+                        const cpu = billingConfigValue(pairs, 'cpu核数');
+                        const memory = billingConfigValue(pairs, '内存');
+                        const os = billingConfigValue(pairs, '操作系统的类型', '操作系统详情');
+                        const compute = spec || [cpu, memory].filter(Boolean).join(' ');
+                        const parts = [compute, os].filter(Boolean);
+                        return parts.length > 0 ? `账单配置：${parts.join(' · ')}` : '';
+                    }
+
+                    if (kind === 'eip-holding') {
+                        const peakBandwidth = billingConfigValue(pairs, '带宽峰值');
+                        const lineType = billingConfigValue(pairs, '线路类型');
+                        const numericBandwidth = Number(peakBandwidth.replace(/[^\d.]/g, ''));
+                        const bandwidth = /kbps/i.test(peakBandwidth) && numericBandwidth >= 1024
+                            ? `${formatBillingNumber(numericBandwidth / 1024)} Mbps`
+                            : peakBandwidth;
+                        const parts = [bandwidth, lineType].filter(Boolean);
+                        return parts.length > 0 ? `账单配置：${parts.join(' · ')}` : '';
+                    }
+
+                    return '';
+                };
+                const billingUsagePresentation = (item) => {
+                    const usage = formatBillingMetric(item);
+                    const resource = item?.current_resource || {};
+                    const disk = resource.system_disk || null;
+                    const eip = resource.eip || null;
+                    const kind = billingItemKind(item);
+                    const config = billingConfigSummary(item, kind);
+
+                    if (kind === 'traffic') {
+                        return {
+                            primary: usage ? `实际出方向流量：${usage}` : '实际出方向流量未返回',
+                            current: '',
+                            billing: '',
+                            config
+                        };
+                    }
+
+                    if (kind === 'system-disk') {
+                        const current = disk?.category || disk?.status
+                            ? `当前配置：${[disk?.category, formatCurrentResourceStatus(disk?.status)].filter(Boolean).join(' · ')}`
+                            : '';
+                        return {
+                            primary: Number(disk?.size_gib) > 0 ? `系统盘 ${disk.size_gib} GiB` : '系统盘当前配置未返回',
+                            current,
+                            billing: usage ? `账单累计容量时长：${usage}·小时` : '账单累计容量时长未返回',
+                            config
+                        };
+                    }
+
+                    if (kind === 'eip-holding') {
+                        const servicePeriod = Number(item?.service_period_seconds);
+                        const hours = Number.isFinite(servicePeriod) && servicePeriod > 0
+                            ? formatBillingNumber(servicePeriod / 3600)
+                            : formatBillingNumber(item?.usage);
+                        const current = eip
+                            ? `当前配置：${[formatCurrentResourceStatus(eip.status), Number(eip.bandwidth_mbps) > 0 ? `${eip.bandwidth_mbps} Mbps` : ''].filter(Boolean).join(' · ')}`
+                            : '';
+                        return {
+                            primary: eip ? `${eip.count || 1} 个 EIP` : '公网 IP 保有服务',
+                            current,
+                            billing: hours ? `账单保有时长：${hours} 小时` : '账单保有时长未返回',
+                            config
+                        };
+                    }
+
+                    if (kind === 'instance-configuration' || kind === 'imageos') {
+                        const hours = formatBillingNumber(item?.usage);
+                        return {
+                            primary: hours ? `账单计费时长：${hours} 小时` : '账单计费时长未返回',
+                            current: '',
+                            billing: '此值用于账单计费，不代表实例实际运行时长。',
+                            config
+                        };
+                    }
+
+                    return {
+                        primary: usage ? `账单累计用量：${usage}` : '账单用量未返回',
+                        current: '',
+                        billing: usage ? '账单累计用量不等同于当前资源数量或容量。' : '',
+                        config
+                    };
+                };
                 const formatTrafficValue = (value) => {
                     const traffic = Number(value || 0);
                     if (!Number.isFinite(traffic) || traffic <= 0) return '0 MB';
@@ -8027,6 +8220,7 @@
                     dialogState,
                     formatBillingDate,
                     formatCurrencyValue,
+                    billingUsagePresentation,
                     formatInstanceSpec,
                     formatPercent,
                     formatTrafficValue,

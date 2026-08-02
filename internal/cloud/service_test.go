@@ -206,34 +206,43 @@ func TestHongKongCountsAsOverseasCDTRegion(t *testing.T) {
 	}
 }
 
-func TestGetBillingDetailsUsesDailySplitItemBill(t *testing.T) {
+func TestGetBillingDetailsFallsBackToDailyBillingItemsAndPaginates(t *testing.T) {
 	var mu sync.Mutex
 	requests := make([]url.Values, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
 		mu.Lock()
-		requests = append(requests, r.URL.Query())
+		requests = append(requests, query)
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		response := map[string]any{
-			"Code": "Success",
-			"Data": map[string]any{
-				"Items": []map[string]any{{
-					"BillingDate":      "2026-08-01",
-					"ProductName":      "云服务器 ECS",
-					"ProductCode":      "ecs",
-					"ProductDetail":    "按量付费 ECS 计算资源",
-					"BillingItem":      "计算资源",
-					"BillingItemCode":  "instance",
-					"BillingType":      "按量付费",
-					"SubscriptionType": "PayAsYouGo",
-					"PretaxAmount":     "1.25",
-					"Currency":         "CNY",
-					"InstanceID":       "i-1",
-					"InstanceSpec":     "ecs.test",
-					"ServicePeriod":    "86400",
-				}},
-			},
+		if query.Get("Action") == "DescribeSplitItemBill" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"Code": "Success", "Data": map[string]any{"Items": []map[string]any{}}})
+			return
 		}
+		item := map[string]any{
+			"BillingDate":      "2026-08-01",
+			"ProductName":      "云服务器 ECS",
+			"ProductCode":      "ecs",
+			"ProductDetail":    "按量付费 ECS 计算资源",
+			"BillingItem":      "计算资源",
+			"BillingItemCode":  "instance",
+			"BillingType":      "按量付费",
+			"SubscriptionType": "PayAsYouGo",
+			"PretaxAmount":     "1.25",
+			"Currency":         "CNY",
+			"InstanceID":       "i-1",
+			"Usage":            "24",
+			"UsageUnit":        "小时",
+		}
+		data := map[string]any{"Items": []map[string]any{item}}
+		if query.Get("NextToken") == "" {
+			data["NextToken"] = "next-page"
+		} else {
+			item["BillingItem"] = "云盘"
+			item["BillingItemCode"] = "disk"
+			item["PretaxAmount"] = "0.25"
+		}
+		response := map[string]any{"Code": "Success", "Data": data}
 		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
@@ -250,28 +259,150 @@ func TestGetBillingDetailsUsesDailySplitItemBill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(details) != 1 || details[0].Date != "2026-08-01" || details[0].Amount != 1.25 || details[0].BillingItem != "计算资源" || details[0].ProductDetail != "按量付费 ECS 计算资源" {
+	if len(details) != 2 || details[0].Date != "2026-08-01" || details[0].ProductDetail != "按量付费 ECS 计算资源" {
 		t.Fatalf("unexpected billing details: %#v", details)
+	}
+	itemsByCode := map[string]BillingDetail{}
+	for _, detail := range details {
+		itemsByCode[detail.BillingItemCode] = detail
+	}
+	if item := itemsByCode["instance"]; item.Amount != 1.25 || item.Usage != 24 || item.Unit != "小时" {
+		t.Fatalf("instance billing item was not parsed: %#v", item)
+	}
+	if item := itemsByCode["disk"]; item.Amount != 0.25 || item.BillingItem != "云盘" {
+		t.Fatalf("disk billing item was not parsed: %#v", item)
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(requests) != 1 {
-		t.Fatalf("billing API calls=%d, want 1", len(requests))
+	if len(requests) != 3 {
+		t.Fatalf("billing API calls=%d, want 3", len(requests))
 	}
 	if got := requests[0].Get("Action"); got != "DescribeSplitItemBill" {
-		t.Fatalf("action=%q, want DescribeSplitItemBill", got)
+		t.Fatalf("split bill action=%q, want DescribeSplitItemBill", got)
 	}
-	if got := requests[0].Get("Granularity"); got != "DAILY" {
-		t.Fatalf("granularity=%q, want DAILY", got)
+	if got := requests[0].Get("IsBillingItem"); got != "" {
+		t.Fatalf("split bill unexpectedly received IsBillingItem=%q", got)
 	}
-	if got := requests[0].Get("BillingCycle"); got != "2026-08" {
-		t.Fatalf("billing cycle=%q", got)
+	for page, request := range requests[1:] {
+		if got := request.Get("Action"); got != "DescribeInstanceBill" {
+			t.Fatalf("page %d action=%q, want DescribeInstanceBill", page+1, got)
+		}
+		if got := request.Get("Granularity"); got != "DAILY" {
+			t.Fatalf("page %d granularity=%q, want DAILY", page+1, got)
+		}
+		if got := request.Get("BillingCycle"); got != "2026-08" {
+			t.Fatalf("page %d billing cycle=%q", page+1, got)
+		}
+		if got := request.Get("BillingDate"); got != "2026-08-01" {
+			t.Fatalf("page %d billing date=%q", page+1, got)
+		}
+		if got := request.Get("IsBillingItem"); got != "true" {
+			t.Fatalf("page %d billing item flag=%q", page+1, got)
+		}
+		if got := request.Get("IsHideZeroCharge"); got != "true" {
+			t.Fatalf("page %d hide zero charge=%q", page+1, got)
+		}
+		if got := request.Get("MaxResults"); got != "300" {
+			t.Fatalf("page %d max results=%q", page+1, got)
+		}
 	}
-	if got := requests[0].Get("BillingDate"); got != "2026-08-01" {
-		t.Fatalf("billing date=%q", got)
+	if got := requests[1].Get("NextToken"); got != "" {
+		t.Fatalf("first page next token=%q", got)
 	}
-	if got := requests[0].Get("IsHideZeroCharge"); got != "true" {
-		t.Fatalf("hide zero charge=%q", got)
+	if got := requests[2].Get("NextToken"); got != "next-page" {
+		t.Fatalf("second page next token=%q", got)
+	}
+}
+
+func TestGetBillingDetailsUsesSplitBillWhenAvailable(t *testing.T) {
+	var mu sync.Mutex
+	actions := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("Action")
+		mu.Lock()
+		actions = append(actions, action)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+
+		data := map[string]any{"Items": []map[string]any{{
+			"BillingDate":     "2026-08-01",
+			"ProductName":     "对象存储 OSS",
+			"BillingItem":     "存储容量",
+			"BillingItemCode": "storage",
+			"PretaxAmount":    "0.30",
+			"Currency":        "CNY",
+		}}}
+		_ = json.NewEncoder(w).Encode(map[string]any{"Code": "Success", "Data": data})
+	}))
+	defer server.Close()
+
+	service := &Service{BSS: &RPCClient{
+		Endpoint:   server.URL,
+		Version:    "2017-12-14",
+		Product:    "BssOpenApi",
+		AccessKey:  "ak",
+		Secret:     "secret",
+		HTTPClient: server.Client(),
+	}}
+	details, err := service.GetBillingDetails(context.Background(), "china", "2026-08", "2026-08-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(details) != 1 || details[0].ProductName != "对象存储 OSS" || details[0].Amount != 0.30 {
+		t.Fatalf("unexpected split fallback details: %#v", details)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(actions) != 1 || actions[0] != "DescribeSplitItemBill" {
+		t.Fatalf("unexpected primary actions: %#v", actions)
+	}
+}
+
+func TestGetBillingDetailsUsesInstanceBillWhenSplitBillIsUnavailable(t *testing.T) {
+	var mu sync.Mutex
+	actions := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("Action")
+		mu.Lock()
+		actions = append(actions, action)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if action == "DescribeSplitItemBill" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"Code": "OperationDenied", "Message": "split bill unavailable"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"Code": "Success", "Data": map[string]any{"Items": []map[string]any{{
+			"BillingDate":     "2026-08-01",
+			"ProductName":     "云服务器 ECS",
+			"BillingItem":     "计算资源",
+			"BillingItemCode": "instance",
+			"PretaxAmount":    "0.42",
+			"Currency":        "CNY",
+		}}}})
+	}))
+	defer server.Close()
+
+	service := &Service{BSS: &RPCClient{
+		Endpoint:   server.URL,
+		Version:    "2017-12-14",
+		Product:    "BssOpenApi",
+		AccessKey:  "ak",
+		Secret:     "secret",
+		HTTPClient: server.Client(),
+	}}
+	details, err := service.GetBillingDetails(context.Background(), "china", "2026-08", "2026-08-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(details) != 1 || details[0].BillingItemCode != "instance" || details[0].Amount != 0.42 {
+		t.Fatalf("unexpected instance fallback details: %#v", details)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(actions) != 2 || actions[0] != "DescribeSplitItemBill" || actions[1] != "DescribeInstanceBill" {
+		t.Fatalf("unexpected fallback actions: %#v", actions)
 	}
 }

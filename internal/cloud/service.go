@@ -400,9 +400,9 @@ func (s *Service) GetBilling(ctx context.Context, siteType, instanceID, billingC
 	return balance, total, currency, nil
 }
 
-// GetBillingDetails uses Alibaba's split-item bill endpoint so a daily record
-// can include the product's billing item (for example, compute, disk, or
-// bandwidth) instead of collapsing everything into one instance total.
+// GetBillingDetails selects one daily bill view. Split bills remain preferred
+// when available because they include split resources; the current instance
+// bill is the billing-item fallback for accounts without split-bill rows.
 func (s *Service) GetBillingDetails(ctx context.Context, siteType, billingCycle, requestedDate string) ([]BillingDetail, error) {
 	if _, err := time.Parse("2006-01", billingCycle); err != nil {
 		return nil, fmt.Errorf("invalid billing cycle %q", billingCycle)
@@ -411,64 +411,74 @@ func (s *Service) GetBillingDetails(ctx context.Context, siteType, billingCycle,
 		return nil, fmt.Errorf("invalid billing date %q for billing cycle %q", requestedDate, billingCycle)
 	}
 
-	bss := s.WithSite(siteType).BSS
-	params := map[string]string{
+	splitDetails, splitErr := s.getSplitItemBillingDetails(ctx, siteType, billingCycle, requestedDate)
+	if splitErr == nil && len(splitDetails) > 0 {
+		return splitDetails, nil
+	}
+
+	details, instanceErr := s.getInstanceBillingItemDetails(ctx, siteType, billingCycle, requestedDate)
+	if instanceErr == nil && len(details) > 0 {
+		return details, nil
+	}
+	if instanceErr != nil {
+		return nil, instanceErr
+	}
+	// A successful instance-bill request with no rows is still a valid empty result.
+	return details, nil
+}
+
+func (s *Service) getInstanceBillingItemDetails(ctx context.Context, siteType, billingCycle, requestedDate string) ([]BillingDetail, error) {
+	return s.getPagedBillingDetails(ctx, siteType, "DescribeInstanceBill", map[string]string{
+		"BillingCycle":     billingCycle,
+		"BillingDate":      requestedDate,
+		"Granularity":      "DAILY",
+		"IsBillingItem":    "true",
+		"IsHideZeroCharge": "true",
+		"MaxResults":       "300",
+	}, requestedDate)
+}
+
+func (s *Service) getSplitItemBillingDetails(ctx context.Context, siteType, billingCycle, requestedDate string) ([]BillingDetail, error) {
+	return s.getPagedBillingDetails(ctx, siteType, "DescribeSplitItemBill", map[string]string{
 		"BillingCycle":     billingCycle,
 		"BillingDate":      requestedDate,
 		"Granularity":      "DAILY",
 		"IsHideZeroCharge": "true",
-		"MaxResults":       "100",
-	}
+		"MaxResults":       "300",
+	}, requestedDate)
+}
+
+func (s *Service) getPagedBillingDetails(ctx context.Context, siteType, action string, params map[string]string, fallbackDate string) ([]BillingDetail, error) {
+	bss := s.WithSite(siteType).BSS
 	details := make([]BillingDetail, 0)
 	for page := 0; page < 100; page++ {
-		result, err := bss.Call(ctx, "DescribeSplitItemBill", params)
+		result, err := bss.Call(ctx, action, params)
 		if err != nil {
-			if page == 0 {
-				// Keep older accounts usable when the split-item permission is
-				// missing; the fallback still provides instance-level details.
-				return s.getInstanceBillingDetails(ctx, siteType, billingCycle, requestedDate)
-			}
 			return nil, err
 		}
-
 		items := mapsAt(result, "Data.Items")
 		if len(items) == 0 {
 			items = mapsAt(result, "Data.Items.Item")
 		}
 		for _, item := range items {
-			details = append(details, billingDetailFromMap(item, "", map[bool]string{true: "USD", false: "CNY"}[siteType == "international"], requestedDate))
+			details = append(details, billingDetailFromMap(item, "", billingCurrency(siteType), fallbackDate))
 		}
 
 		data, _ := result["Data"].(map[string]any)
 		nextToken := stringValue(data["NextToken"])
 		if nextToken == "" {
-			break
+			return sortBillingDetails(details), nil
 		}
 		params["NextToken"] = nextToken
 	}
-	if len(details) == 0 {
-		// Some accounts have no split-bill records even though their instance
-		// bill is available. Fall back per day so the history does not go blank.
-		return s.getInstanceBillingDetails(ctx, siteType, billingCycle, requestedDate)
-	}
-	return sortBillingDetails(details), nil
+	return nil, fmt.Errorf("%s pagination exceeded 100 pages", action)
 }
 
-func (s *Service) getInstanceBillingDetails(ctx context.Context, siteType, billingCycle, requestedDate string) ([]BillingDetail, error) {
-	bss := s.WithSite(siteType).BSS
-	result, err := bss.Call(ctx, "QueryInstanceBill", map[string]string{
-		"BillingCycle": billingCycle,
-		"BillingDate":  requestedDate,
-		"Granularity":  "DAILY",
-	})
-	if err != nil {
-		return nil, err
+func billingCurrency(siteType string) string {
+	if siteType == "international" {
+		return "USD"
 	}
-	details := make([]BillingDetail, 0)
-	for _, item := range mapsAt(result, "Data.Items.Item") {
-		details = append(details, billingDetailFromMap(item, "", map[bool]string{true: "USD", false: "CNY"}[siteType == "international"], requestedDate))
-	}
-	return sortBillingDetails(details), nil
+	return "CNY"
 }
 
 func sortBillingDetails(details []BillingDetail) []BillingDetail {

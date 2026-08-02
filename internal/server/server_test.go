@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,74 @@ import (
 	"github.com/Kori1c/ecs-controller/internal/cloud"
 	"github.com/Kori1c/ecs-controller/internal/store"
 )
+
+func TestTemplateAndStaticAssetsUseCompressionAndCacheHeaders(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	root := t.TempDir()
+	templatePath := filepath.Join(root, "template.html")
+	if err := os.WriteFile(templatePath, []byte("<!doctype html><link href=\"static/app.css?v=__ASSET_VERSION__\">"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "static"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "static", "app.css"), []byte("body { color: #123; }"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := New(st, t.TempDir(), templatePath, "setup-token", nil).Handler()
+	for _, test := range []struct {
+		path     string
+		cache    string
+		wantBody string
+		noToken  bool
+	}{
+		{path: "/", cache: "no-cache", wantBody: "static/app.css?v=", noToken: true},
+		{path: "/static/app.css", cache: "public, max-age=31536000, immutable", wantBody: "body { color: #123; }"},
+		{path: "/healthz", cache: "", wantBody: "\"ok\":true"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, test.path, nil)
+			req.Header.Set("Accept-Encoding", "gzip")
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+
+			response := recorder.Result()
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("status=%d", response.StatusCode)
+			}
+			if got := response.Header.Get("Content-Encoding"); got != "gzip" {
+				t.Fatalf("Content-Encoding=%q, want gzip", got)
+			}
+			if test.cache != "" && response.Header.Get("Cache-Control") != test.cache {
+				t.Fatalf("Cache-Control=%q, want %q", response.Header.Get("Cache-Control"), test.cache)
+			}
+			reader, err := gzip.NewReader(response.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := reader.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(body), test.wantBody) {
+				t.Fatalf("response body %q does not contain %q", body, test.wantBody)
+			}
+			if test.noToken && strings.Contains(string(body), "__ASSET_VERSION__") {
+				t.Fatal("template did not replace asset version token")
+			}
+		})
+	}
+}
 
 func TestSetupLoginAndCSRF(t *testing.T) {
 	st, err := store.Open(t.TempDir())

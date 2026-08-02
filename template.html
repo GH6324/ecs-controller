@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/tailwind-compiled.css">
+    <link rel="stylesheet" href="static/tailwind-compiled.css?v=__ASSET_VERSION__">
     <script>
         // 自动跟随系统主题
         (function() {
@@ -272,6 +272,52 @@
 
         [v-cloak] {
             display: none !important;
+        }
+
+        .content-skeleton__line,
+        .content-skeleton__block {
+            border-radius: 999px;
+            background: linear-gradient(90deg, color-mix(in srgb, var(--panel-strong) 80%, var(--panel)) 0%, color-mix(in srgb, var(--accent-light) 68%, var(--panel-strong)) 50%, color-mix(in srgb, var(--panel-strong) 80%, var(--panel)) 100%);
+            background-size: 200% 100%;
+            animation: boot-sheen 1.35s linear infinite;
+        }
+
+        .content-skeleton {
+            display: grid;
+            gap: 16px;
+        }
+
+        .content-skeleton__head {
+            display: grid;
+            gap: 9px;
+        }
+
+        .content-skeleton__line--short { width: 84px; height: 9px; }
+        .content-skeleton__line--title { width: min(210px, 68%); height: 22px; }
+        .content-skeleton__line--copy { width: min(390px, 88%); height: 10px; }
+
+        .content-skeleton__grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .content-skeleton__block {
+            min-height: 148px;
+            border-radius: 16px;
+        }
+
+        @keyframes boot-sheen {
+            from { background-position: 100% 0; }
+            to { background-position: -100% 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .content-skeleton__line,
+            .content-skeleton__block {
+                transition: none;
+                animation: none;
+            }
         }
 
         .glass-panel {
@@ -1564,10 +1610,42 @@
 
         .account-card-grid {
             display: grid;
-            gap: 8px;
+            gap: 10px;
             margin-top: 14px;
-            color: #4b5563;
-            font-size: 0.875rem;
+            color: var(--muted);
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+
+        .account-card-grid__meta,
+        .account-card-grid__metric {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .account-card-grid__label {
+            flex: 0 0 auto;
+            color: var(--muted);
+        }
+
+        .account-card-grid__value {
+            min-width: 0;
+            color: var(--text);
+            font-weight: 650;
+            text-align: right;
+            overflow-wrap: anywhere;
+        }
+
+        .account-card-grid__metric .account-card-grid__value {
+            color: var(--accent);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .account-card-grid .progress-track {
+            margin-top: -3px;
         }
 
         .account-usage {
@@ -1951,6 +2029,84 @@
 
             .billing-details-summary__meta {
                 text-align: left;
+            }
+
+            /* Turn the wide desktop table into readable bill entries on phones. */
+            .billing-details-scroll {
+                max-height: min(500px, 56vh);
+                overflow-x: hidden;
+                border-radius: 14px;
+                scrollbar-gutter: auto;
+            }
+
+            .billing-details-table,
+            .billing-details-table tbody {
+                display: block;
+                min-width: 0;
+                width: 100%;
+            }
+
+            .billing-details-table thead {
+                display: none;
+            }
+
+            .billing-details-table tr {
+                position: relative;
+                display: block;
+                min-width: 0;
+                padding: 12px;
+            }
+
+            .billing-details-table th,
+            .billing-details-table td {
+                display: block;
+                min-width: 0;
+                border: 0;
+                padding: 0;
+            }
+
+            .billing-details-table tr:not(:last-child) {
+                border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+            }
+
+            .billing-details-table td:first-child {
+                padding-right: 66px;
+            }
+
+            .billing-details-table__amount {
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                color: var(--accent-strong);
+                font-size: .84rem;
+            }
+
+            .billing-details-table__usage {
+                min-width: 0;
+                margin-top: 6px;
+                padding-top: 0 !important;
+                border-top: 0 !important;
+            }
+
+            .billing-details-table__product {
+                font-size: .8rem;
+            }
+
+            .billing-details-table__item {
+                margin-top: 3px;
+            }
+
+            .billing-details-table__usage-main {
+                font-size: .78rem;
+                line-height: 1.45;
+            }
+
+            .billing-details-table__code,
+            .billing-details-table__instance,
+            .billing-details-table__usage-current,
+            .billing-details-table__usage-billing,
+            .billing-details-table__usage-config {
+                line-height: 1.42;
             }
         }
 
@@ -3056,6 +3212,24 @@
             transition: width .35s ease;
         }
 
+        .update-progress.is-active > span {
+            background: linear-gradient(90deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 58%, #fff) 48%, var(--accent) 100%);
+            background-size: 180% 100%;
+            box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 46%, transparent);
+            animation: update-progress-sheen 1.35s linear infinite;
+        }
+
+        @keyframes update-progress-sheen {
+            from { background-position: 100% 0; }
+            to { background-position: -80% 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .update-progress.is-active > span {
+                animation: none;
+            }
+        }
+
         .about-section {
             display: grid;
             gap: 16px;
@@ -3904,7 +4078,7 @@
 <body>
     <div id="app" v-cloak class="app-shell">
         <div class="app-container">
-            <header v-if="initialized && !loadingCheckInit && !criticalError && isAdmin" class="glass-panel page-header">
+            <header v-if="initialized && !criticalError && isAdmin" class="glass-panel page-header">
                 <div class="page-header__row">
                     <div class="page-brand">
                         <div class="brand-lockup">
@@ -3974,7 +4148,7 @@
                 </div>
             </div>
 
-            <div v-if="initialized && !loadingCheckInit && !criticalError && isAdmin" class="workspace-grid">
+            <div v-if="initialized && !criticalError && isAdmin" class="workspace-grid">
                 <aside class="glass-panel sidebar-panel">
                     <div class="menu-stack">
                         <button v-for="(item, index) in menuItems" :key="item.key" @click="currentMenu = item.key"
@@ -3989,6 +4163,19 @@
                 </aside>
 
                 <main class="content-stack">
+                    <section v-if="initialWorkspaceLoading" class="glass-panel section-panel content-skeleton" aria-label="正在加载控制台内容">
+                        <div class="content-skeleton__head">
+                            <div class="content-skeleton__line content-skeleton__line--short"></div>
+                            <div class="content-skeleton__line content-skeleton__line--title"></div>
+                            <div class="content-skeleton__line content-skeleton__line--copy"></div>
+                        </div>
+                        <div class="content-skeleton__grid">
+                            <div class="content-skeleton__block"></div>
+                            <div class="content-skeleton__block"></div>
+                        </div>
+                    </section>
+
+                    <template v-if="!initialWorkspaceLoading">
                     <section v-if="currentMenu === 'status'" class="glass-panel section-panel">
                         <div class="section-head">
                             <div>
@@ -4349,12 +4536,18 @@
                                     <span class="text-xs text-[var(--muted)]">{{ acc.instanceCount || 0 }} 台实例</span>
                                 </div>
                                 <div class="account-card-grid">
-                                    <div>区域：{{ getRegionName(acc.regionId) }}</div>
-                                    <div>站点：{{ getSiteTypeLabel(acc.siteType) }}</div>
-                                    <div>
-                                        账号 CDT 流量：
-                                        <span v-if="hasTrafficIssue(acc)" class="text-[#dc2626]">{{ trafficIssueText(acc) }}</span>
-                                        <span v-else>{{ formatTrafficValue(acc.usageUsed) }} / {{ acc.maxTraffic }} GB</span>
+                                    <div class="account-card-grid__meta">
+                                        <span class="account-card-grid__label">区域</span>
+                                        <strong class="account-card-grid__value">{{ getRegionName(acc.regionId) }}</strong>
+                                    </div>
+                                    <div class="account-card-grid__meta">
+                                        <span class="account-card-grid__label">站点</span>
+                                        <strong class="account-card-grid__value">{{ getSiteTypeLabel(acc.siteType) }}</strong>
+                                    </div>
+                                    <div class="account-card-grid__metric">
+                                        <span class="account-card-grid__label">账号 CDT 流量</span>
+                                        <strong v-if="hasTrafficIssue(acc)" class="account-card-grid__value text-[#dc2626]">{{ trafficIssueText(acc) }}</strong>
+                                        <strong v-else class="account-card-grid__value">{{ formatTrafficValue(acc.usageUsed) }} / {{ acc.maxTraffic }} GB</strong>
                                     </div>
                                     <div class="progress-track">
                                         <div class="progress-fill" :class="{ warning: (acc.usagePercent || 0) >= 95 }"
@@ -4362,7 +4555,10 @@
                                     </div>
                                     <div v-if="hasTrafficIssue(acc)" class="text-xs text-[#dc2626]">{{ trafficIssueText(acc) }}</div>
                                     <div v-if="acc.billing && acc.billing.enabled && !acc.billing.error">
-                                        <div>消费情况：本月消费 {{ formatCurrencyValue(acc.billing.monthly_cost, acc.billing.currency) }} / 余额 {{ formatCurrencyValue(acc.billing.balance, acc.billing.currency) }}</div>
+                                        <div class="account-card-grid__metric">
+                                            <span class="account-card-grid__label">消费情况</span>
+                                            <strong class="account-card-grid__value">本月 {{ formatCurrencyValue(acc.billing.monthly_cost, acc.billing.currency) }} · 余额 {{ formatCurrencyValue(acc.billing.balance, acc.billing.currency) }}</strong>
+                                        </div>
                                         <button @click="openBillingDetails(acc)" class="account-billing__details-button" style="margin-top: 8px;">查看历史消费</button>
                                     </div>
                                     <div v-else-if="acc.billing && acc.billing.error" class="account-billing__error">{{ acc.billing.error }}</div>
@@ -4821,7 +5017,7 @@
                                         <span>在线更新 · {{ updatePhaseText(updateState.phase, updateState.status) }}</span>
                                         <strong>{{ Number(updateState.progress || 0) }}%</strong>
                                     </div>
-                                    <div class="update-progress"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
+                                    <div class="update-progress is-active"><span :style="{ width: `${Number(updateState.progress || 0)}%` }"></span></div>
                                     <p class="update-center-card__message">{{ updateState.message || '更新任务执行中，请不要关闭容器。' }}</p>
                                 </div>
                                 <div v-else-if="updateState.status === 'success' && updateReloadPending" class="update-center-card__notice is-success" aria-live="polite">
@@ -4865,10 +5061,11 @@
                             </aside>
                         </div>
                     </section>
+                    </template>
                 </main>
             </div>
 
-            <nav v-if="initialized && !loadingCheckInit && !criticalError && isAdmin" class="mobile-bottom-nav">
+            <nav v-if="initialized && !criticalError && isAdmin" class="mobile-bottom-nav">
                 <button
                     v-for="item in menuItems"
                     :key="'mobile-nav-' + item.key"
@@ -5399,7 +5596,7 @@
         </div>
     </div>
 
-    <script src="static/vue.global.prod.js"></script>
+    <script src="static/vue.global.prod.js?v=__ASSET_VERSION__"></script>
     <script>
         // Keep legacy action URLs while attaching the Go backend's CSRF token.
         const nativeFetch = window.fetch.bind(window);
@@ -5871,12 +6068,14 @@
 
                 const loadingCheckInit = ref(true);
                 const loading = ref(true);
+                const initialWorkspaceLoading = ref(false);
                 const checkingLogin = ref(true);
                 const showLoginModal = ref(false);
                 const passwordInput = ref('');
                 const criticalError = ref(null);
                 const isAdmin = ref(false);
                 const cronWarning = ref(false);
+                let bootstrappingAdmin = false;
                 const navigationStorageKey = 'ecs-controller.navigation';
                 const readNavigationState = () => {
                     try {
@@ -5934,6 +6133,36 @@
                 let updatePollStartedAt = 0;
                 let updatePending = false;
                 let updateReloadTimer = null;
+                let updateReloadAttempted = false;
+                const updateSessionStorageKey = 'ecs-controller.online-update';
+                const readUpdateSession = () => {
+                    try {
+                        const raw = window.sessionStorage.getItem(updateSessionStorageKey);
+                        const value = raw ? JSON.parse(raw) : null;
+                        return value && typeof value === 'object' ? value : null;
+                    } catch (error) {
+                        return null;
+                    }
+                };
+                const saveUpdateSession = () => {
+                    try {
+                        window.sessionStorage.setItem(updateSessionStorageKey, JSON.stringify({
+                            target: updatePollTarget,
+                            requestId: updatePollRequestID,
+                            startedAt: updatePollStartedAt,
+                            reloadAttempted: updateReloadAttempted
+                        }));
+                    } catch (error) {
+                        // Continue without resume support when session storage is unavailable.
+                    }
+                };
+                const clearUpdateSession = () => {
+                    try {
+                        window.sessionStorage.removeItem(updateSessionStorageKey);
+                    } catch (error) {
+                        // Nothing else is required when storage is unavailable.
+                    }
+                };
                 const fetchingAllInstances = ref(false);
                 const syncingInstances = ref(false);
                 const refreshingInstanceIds = ref([]);
@@ -6639,16 +6868,46 @@
                     updateReloadPending.value = true;
                     if (updateReloadTimer) return;
                     updateReloadTimer = window.setTimeout(() => {
+                        updateReloadTimer = null;
+                        updateReloadAttempted = true;
+                        saveUpdateSession();
+                        persistNavigationState();
                         const nextUrl = new URL(window.location.href);
                         nextUrl.searchParams.set('_updated', String(Date.now()));
                         window.location.replace(nextUrl.toString());
-                    }, 1400);
+                    }, 1800);
                 };
 
                 const ensureUpdatePolling = () => {
                     if (!updateInterval) {
                         updateInterval = window.setInterval(fetchUpdateStatus, 2000);
                     }
+                };
+
+                const resumeOnlineUpdateTracking = async () => {
+                    const saved = readUpdateSession();
+                    const startedAt = Number(saved?.startedAt || 0);
+                    if (!saved?.target || !startedAt || Date.now() - startedAt > 20 * 60 * 1000) {
+                        if (saved) clearUpdateSession();
+                        return;
+                    }
+                    updatePending = true;
+                    updatePollTarget = String(saved.target || '').toLowerCase();
+                    updatePollRequestID = String(saved.requestId || '');
+                    updatePollStartedAt = startedAt;
+                    updateReloadAttempted = Boolean(saved.reloadAttempted);
+                    updateReloadPending.value = false;
+                    updateState.value = {
+                        ...updateState.value,
+                        status: 'queued',
+                        phase: 'queued',
+                        progress: 8,
+                        message: '正在恢复更新进度，请稍候。',
+                        target_commit: updatePollTarget,
+                        request_id: updatePollRequestID
+                    };
+                    ensureUpdatePolling();
+                    await fetchUpdateStatus();
                 };
 
                 const updateStatusMatchesPending = (data) => {
@@ -6688,17 +6947,26 @@
                             ensureUpdatePolling();
                         } else if (pendingAtRequest && updateState.value.status === 'success') {
                             updatePending = false;
-                            updatePollTarget = '';
-                            updatePollRequestID = '';
                             stopUpdatePolling();
-                            openAlert('更新完成，页面即将重新加载', 'success');
-                            scheduleUpdateReload();
+                            updateReloadPending.value = true;
+                            if (updateReloadAttempted) {
+                                updatePollTarget = '';
+                                updatePollRequestID = '';
+                                clearUpdateSession();
+                                openAlert('更新完成，已加载最新版本', 'success');
+                                void checkForUpdates({ silent: true });
+                            } else {
+                                openAlert('更新完成，页面即将重新加载', 'success');
+                                scheduleUpdateReload();
+                            }
                         } else if (pendingAtRequest && updateState.value.status === 'error') {
                             updatePending = false;
                             updatePollTarget = '';
                             updatePollRequestID = '';
                             stopUpdatePolling();
                             updateReloadPending.value = false;
+                            updateReloadAttempted = false;
+                            clearUpdateSession();
                             openAlert(updateState.value.message || '在线更新失败，请查看系统日志', 'error');
                         } else {
                             stopUpdatePolling();
@@ -6712,6 +6980,8 @@
                                 updatePollRequestID = '';
                                 stopUpdatePolling();
                                 updateReloadPending.value = false;
+                                updateReloadAttempted = false;
+                                clearUpdateSession();
                                 updateState.value = { ...updateState.value, status: 'error', phase: 'failed', message: '更新状态长时间未响应，请检查 updater 容器和系统日志。' };
                                 openAlert(updateState.value.message, 'error');
                             } else {
@@ -6794,6 +7064,8 @@
                         updatePollTarget = targetCommit.toLowerCase();
                         updatePollRequestID = String(data.request_id || '');
                         updatePollStartedAt = Date.now();
+                        updateReloadAttempted = false;
+                        saveUpdateSession();
                         updateReloadPending.value = false;
                         updateState.value = {
                             ...updateState.value,
@@ -6812,6 +7084,8 @@
                         updatePending = false;
                         updatePollTarget = '';
                         updatePollRequestID = '';
+                        updateReloadAttempted = false;
+                        clearUpdateSession();
                         stopUpdatePolling();
                         openAlert('在线更新请求失败', 'error');
                     } finally {
@@ -7960,9 +8234,6 @@
                         const data = await res.json();
                         csrfToken = data.logged_in ? (data.csrf_token || '') : '';
                         isAdmin.value = !!data.logged_in;
-                        if (isAdmin.value) {
-                            await fetchConfig();
-                        }
                     } catch (error) {
                         console.error('Session check failed', error);
                     } finally {
@@ -7985,13 +8256,28 @@
                         config.value.AppBrand.logo_url = data.brand?.logo_url || '';
                         initialized.value = !!data.initialized;
                         if (initialized.value) {
+                            bootstrappingAdmin = true;
                             await checkLoginStatus();
                             if (isAdmin.value) {
-                                await syncCurrentMenu();
+                                initialWorkspaceLoading.value = true;
+                                void (async () => {
+                                    try {
+                                        // These local reads do not depend on each other, so avoid adding a full network round trip to first paint.
+                                        await Promise.all([fetchConfig(), resumeOnlineUpdateTracking()]);
+                                        await syncCurrentMenu();
+                                    } catch (error) {
+                                        console.error('Initial workspace load failed', error);
+                                    } finally {
+                                        initialWorkspaceLoading.value = false;
+                                        bootstrappingAdmin = false;
+                                    }
+                                })();
                             } else {
+                                bootstrappingAdmin = false;
                                 loading.value = false;
                             }
                         } else {
+                            bootstrappingAdmin = false;
                             loading.value = false;
                         }
                     } catch (error) {
@@ -8073,10 +8359,17 @@
 
                 watch(isAdmin, async (value) => {
                     if (value) {
-                        await fetchConfig();
-                        await syncCurrentMenu();
+                        if (bootstrappingAdmin) return;
+                        initialWorkspaceLoading.value = true;
+                        try {
+                            await fetchConfig();
+                            await syncCurrentMenu();
+                        } finally {
+                            initialWorkspaceLoading.value = false;
+                        }
                     } else {
                         statusInstances.value = [];
+                        initialWorkspaceLoading.value = false;
                         stopStatusPolling();
                         stopManagePolling();
                         stopAccountPolling();
@@ -8168,6 +8461,7 @@
                     filteredManagedInstances,
                     filteredStatusInstances,
                     initialized,
+                    initialWorkspaceLoading,
                     isAdmin,
                     loading,
                     loadingCheckInit,

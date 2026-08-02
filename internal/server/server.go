@@ -1,6 +1,7 @@
 package server
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -50,7 +51,65 @@ func New(st *store.Store, dataDir, templatePath, setupToken string, client cloud
 	return &Server{Store: st, DataDir: dataDir, Template: templatePath, SetupToken: setupToken, Cloud: client, Log: log.Default(), previews: map[string]map[string]any{}}
 }
 
-func (s *Server) Handler() http.Handler { return http.HandlerFunc(s.handle) }
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	writer      *gzip.Writer
+	wroteHeader bool
+}
+
+func (w *gzipResponseWriter) WriteHeader(status int) {
+	if !w.wroteHeader {
+		w.wroteHeader = true
+		contentType := w.Header().Get("Content-Type")
+		if status != http.StatusNoContent && status != http.StatusNotModified && shouldGzip(contentType) && w.Header().Get("Content-Encoding") == "" {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Add("Vary", "Accept-Encoding")
+			w.Header().Del("Content-Length")
+			w.writer = gzip.NewWriter(w.ResponseWriter)
+		}
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *gzipResponseWriter) Write(data []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.writer != nil {
+		return w.writer.Write(data)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *gzipResponseWriter) Close() error {
+	if w.writer != nil {
+		return w.writer.Close()
+	}
+	return nil
+}
+
+func shouldGzip(contentType string) bool {
+	contentType = strings.ToLower(contentType)
+	return strings.HasPrefix(contentType, "text/") ||
+		strings.HasPrefix(contentType, "application/javascript") ||
+		strings.HasPrefix(contentType, "application/json") ||
+		strings.HasPrefix(contentType, "application/xml") ||
+		strings.HasPrefix(contentType, "image/svg+xml")
+}
+
+func gzipHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || r.Header.Get("Range") != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		compressed := &gzipResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(compressed, r)
+		_ = compressed.Close()
+	})
+}
+
+func (s *Server) Handler() http.Handler { return gzipHandler(http.HandlerFunc(s.handle)) }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/healthz" {
@@ -63,6 +122,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if action == "" && strings.HasPrefix(r.URL.Path, "/static/") {
+		if strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+		}
 		http.FileServer(http.Dir(filepath.Dir(s.Template))).ServeHTTP(w, r)
 		return
 	}
@@ -108,7 +172,18 @@ func (s *Server) serveTemplate(w http.ResponseWriter) {
 		s.error(w, 500, "模板读取失败")
 		return
 	}
+	assetVersion := strings.TrimSpace(app.Commit)
+	if assetVersion == "" || assetVersion == "dev" {
+		if info, statErr := os.Stat(s.Template); statErr == nil {
+			assetVersion = fmt.Sprintf("%s-%d", fallback(app.Version, "dev"), info.ModTime().Unix())
+		}
+	}
+	if assetVersion == "" {
+		assetVersion = "dev"
+	}
+	data = []byte(strings.ReplaceAll(string(data), "__ASSET_VERSION__", assetVersion))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)
 }
 func (s *Server) checkInit(w http.ResponseWriter) {

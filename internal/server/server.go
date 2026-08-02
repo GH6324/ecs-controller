@@ -28,19 +28,20 @@ import (
 )
 
 type Server struct {
-	Store        *store.Store
-	Cloud        cloud.Client
-	CloudFactory func(app.Account) cloud.Client
-	DataDir      string
-	Template     string
-	SetupToken   string
-	CookieSecure bool
-	UpdateDir    string
-	Log          *log.Logger
-	mu           sync.Mutex
-	updateMu     sync.Mutex
-	previews     map[string]map[string]any
-	imageChecker func(context.Context, string) (bool, string, error)
+	Store         *store.Store
+	Cloud         cloud.Client
+	CloudFactory  func(app.Account) cloud.Client
+	DataDir       string
+	Template      string
+	SetupToken    string
+	CookieSecure  bool
+	UpdateDir     string
+	Log           *log.Logger
+	mu            sync.Mutex
+	updateMu      sync.Mutex
+	previews      map[string]map[string]any
+	imageChecker  func(context.Context, string) (bool, string, error)
+	githubAPIBase string
 }
 
 func New(st *store.Store, dataDir, templatePath, setupToken string, client cloud.Client) *Server {

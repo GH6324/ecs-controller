@@ -24,6 +24,7 @@ const (
 )
 
 var commitPattern = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
+var versionTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 type updateCheckResult struct {
 	SHA    string `json:"sha"`
@@ -31,6 +32,13 @@ type updateCheckResult struct {
 		Message string `json:"message"`
 	} `json:"commit"`
 	HTMLURL string `json:"html_url"`
+}
+
+type updateVersionTag struct {
+	Name   string `json:"name"`
+	Commit struct {
+		SHA string `json:"sha"`
+	} `json:"commit"`
 }
 
 type updateRequest struct {
@@ -49,6 +57,13 @@ func (s *Server) updateBranch() string {
 
 func (s *Server) updateRepositoryURL() string {
 	return "https://github.com/" + s.updateRepository()
+}
+
+func (s *Server) updateAPIURL() string {
+	if base := strings.TrimRight(strings.TrimSpace(s.githubAPIBase), "/"); base != "" {
+		return base
+	}
+	return "https://api.github.com"
 }
 
 func (s *Server) updateImageRepository() string {
@@ -91,7 +106,7 @@ func (s *Server) checkForUpdate(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
-	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/commits/%s", s.updateRepository(), s.updateBranch())
+	endpoint := fmt.Sprintf("%s/repos/%s/commits/%s", s.updateAPIURL(), s.updateRepository(), s.updateBranch())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		s.error(w, http.StatusBadGateway, "更新检查请求创建失败")
@@ -120,8 +135,13 @@ func (s *Server) checkForUpdate(w http.ResponseWriter, r *http.Request) {
 		s.json(w, http.StatusOK, result)
 		return
 	}
+	versionTags := s.versionTags(ctx)
+	if version := versionTags[strings.ToLower(currentCommit)]; version != "" {
+		result["current_version"] = version
+	}
+	latestVersion := fallback(versionTags[strings.ToLower(latest.SHA)], shortCommit(latest.SHA))
 	result["latest"] = map[string]any{
-		"version": shortCommit(latest.SHA),
+		"version": latestVersion,
 		"commit":  latest.SHA,
 		"message": strings.TrimSpace(strings.Split(latest.Commit.Message, "\n")[0]),
 		"url":     latest.HTMLURL,
@@ -142,13 +162,50 @@ func (s *Server) checkForUpdate(w http.ResponseWriter, r *http.Request) {
 		if imageErr != nil {
 			result["message"] = "检测到源码更新，但无法确认对应的预构建 Docker 镜像，请稍后重试"
 		} else {
-			result["message"] = "检测到源码更新，但对应的预构建 Docker 镜像尚未发布，请稍后重试"
+			result["message"] = "检测到源码更新，Docker 镜像正在构建中····，请稍等片刻～"
 		}
 	}
 	if !s.updateConfigured() {
 		result["message"] = "当前部署未启用 Docker 在线更新，请使用 install.sh 更新"
 	}
 	s.json(w, http.StatusOK, result)
+}
+
+func (s *Server) versionTags(ctx context.Context) map[string]string {
+	endpoint := fmt.Sprintf("%s/repos/%s/tags?per_page=100", s.updateAPIURL(), s.updateRepository())
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("User-Agent", "ecs-controller-update-check")
+	response, err := (&http.Client{Timeout: 8 * time.Second}).Do(request)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil
+	}
+	var tags []updateVersionTag
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&tags); err != nil {
+		return nil
+	}
+	return versionTagsForCommits(tags)
+}
+
+func versionTagsForCommits(tags []updateVersionTag) map[string]string {
+	versions := make(map[string]string, len(tags))
+	for _, tag := range tags {
+		commit := strings.ToLower(strings.TrimSpace(tag.Commit.SHA))
+		if !commitPattern.MatchString(commit) || !versionTagPattern.MatchString(tag.Name) {
+			continue
+		}
+		if _, exists := versions[commit]; !exists {
+			versions[commit] = tag.Name
+		}
+	}
+	return versions
 }
 
 func (s *Server) prebuiltImageAvailable(ctx context.Context, commit string) (bool, string, error) {

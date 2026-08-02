@@ -90,6 +90,84 @@ func TestTemplateAndStaticAssetsUseCompressionAndCacheHeaders(t *testing.T) {
 	}
 }
 
+func TestVersionTagsForCommitsUsesOnlySemanticReleaseTags(t *testing.T) {
+	firstCommit := strings.Repeat("a", 40)
+	secondCommit := strings.Repeat("b", 40)
+	invalidCommit := "not-a-commit"
+	firstTag := updateVersionTag{Name: "v1.6.40"}
+	firstTag.Commit.SHA = firstCommit
+	duplicateTag := updateVersionTag{Name: "v9.9.9"}
+	duplicateTag.Commit.SHA = firstCommit
+	nonVersionTag := updateVersionTag{Name: "latest"}
+	nonVersionTag.Commit.SHA = secondCommit
+	invalidTag := updateVersionTag{Name: "v1.6.41"}
+	invalidTag.Commit.SHA = invalidCommit
+
+	versions := versionTagsForCommits([]updateVersionTag{firstTag, duplicateTag, nonVersionTag, invalidTag})
+	if got := versions[firstCommit]; got != "v1.6.40" {
+		t.Fatalf("version=%q, want v1.6.40", got)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("unexpected version tags: %#v", versions)
+	}
+}
+
+func TestCheckForUpdateUsesGitHubReleaseTagsAsDisplayVersions(t *testing.T) {
+	currentCommit := strings.Repeat("a", 40)
+	latestCommit := strings.Repeat("b", 40)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/repos/Kori1c/ecs-controller/commits/main":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sha":      latestCommit,
+				"commit":   map[string]any{"message": "release build"},
+				"html_url": "https://github.com/Kori1c/ecs-controller/commit/" + latestCommit,
+			})
+		case "/repos/Kori1c/ecs-controller/tags":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"name": "v1.6.40", "commit": map[string]any{"sha": latestCommit}},
+				{"name": "v1.6.39", "commit": map[string]any{"sha": currentCommit}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer api.Close()
+
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.githubAPIBase = api.URL
+	srv.imageChecker = func(context.Context, string) (bool, string, error) {
+		return true, "sha256:test", nil
+	}
+
+	previousCommit, previousVersion := app.Commit, app.Version
+	app.Commit, app.Version = currentCommit, "sha-"+shortCommit(currentCommit)
+	defer func() { app.Commit, app.Version = previousCommit, previousVersion }()
+
+	recorder := httptest.NewRecorder()
+	srv.checkForUpdate(recorder, httptest.NewRequest(http.MethodGet, "/index.php?action=check_update", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var result map[string]any
+	if err := json.NewDecoder(recorder.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if got := result["current_version"]; got != "v1.6.39" {
+		t.Fatalf("current_version=%q, want v1.6.39", got)
+	}
+	latest, ok := result["latest"].(map[string]any)
+	if !ok || latest["version"] != "v1.6.40" {
+		t.Fatalf("latest=%#v, want v1.6.40", result["latest"])
+	}
+}
+
 func TestSetupLoginAndCSRF(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {

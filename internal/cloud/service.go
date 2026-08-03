@@ -12,15 +12,16 @@ import (
 )
 
 type Instance struct {
-	ID           string `json:"instanceId"`
-	Name         string `json:"instanceName"`
-	Status       string `json:"status"`
-	PublicIP     string `json:"publicIp"`
-	PrivateIP    string `json:"privateIp"`
-	InstanceType string `json:"instanceType"`
-	CPU          int    `json:"cpu"`
-	Memory       int    `json:"memory"`
-	OSName       string `json:"osName"`
+	ID                string `json:"instanceId"`
+	Name              string `json:"instanceName"`
+	Status            string `json:"status"`
+	PublicIP          string `json:"publicIp"`
+	PrivateIP         string `json:"privateIp"`
+	InstanceType      string `json:"instanceType"`
+	CPU               int    `json:"cpu"`
+	Memory            int    `json:"memory"`
+	OSName            string `json:"osName"`
+	InternetBandwidth int    `json:"internetMaxBandwidthOut"`
 }
 
 type RunRequest struct {
@@ -108,6 +109,15 @@ type BillingEIP struct {
 	Count        int    `json:"count,omitempty"`
 }
 
+// InstancePublicNetwork is the current EIP binding for one ECS instance.
+// It is kept separate from historical billing enrichment so instance lists can
+// display the live EIP address and bandwidth without querying disk resources.
+type InstancePublicNetwork struct {
+	AllocationID string
+	Address      string
+	Bandwidth    int
+}
+
 // BillingDetailClient is optional so existing lightweight cloud fakes do not
 // need to implement the detail endpoint used only by the billing modal.
 type BillingDetailClient interface {
@@ -118,6 +128,12 @@ type BillingDetailClient interface {
 // without making an unavailable inventory API block historical billing data.
 type BillingResourceClient interface {
 	DescribeBillingResources(context.Context, string, []string) (map[string]BillingResource, error)
+}
+
+// InstancePublicNetworkClient is optional for compatibility with lightweight
+// cloud clients. It supplies the current EIP bandwidth during instance sync.
+type InstancePublicNetworkClient interface {
+	DescribeInstancePublicNetworks(context.Context, string, []string) (map[string]InstancePublicNetwork, error)
 }
 
 // MonthlyTrafficClient queries the current month's instance traffic directly
@@ -310,6 +326,50 @@ func (s *Service) DescribeInstance(ctx context.Context, region, id string) (*Ins
 	}
 	v := instanceFromMap(items[0])
 	return &v, nil
+}
+
+func (s *Service) DescribeInstancePublicNetworks(ctx context.Context, region string, instanceIDs []string) (map[string]InstancePublicNetwork, error) {
+	resources := make(map[string]InstancePublicNetwork, len(instanceIDs))
+	seen := make(map[string]struct{}, len(instanceIDs))
+	failures := make([]string, 0)
+	for _, instanceID := range instanceIDs {
+		instanceID = strings.TrimSpace(instanceID)
+		if instanceID == "" {
+			continue
+		}
+		if _, ok := seen[instanceID]; ok {
+			continue
+		}
+		seen[instanceID] = struct{}{}
+		eips, err := s.EIP.Call(ctx, "DescribeEipAddresses", map[string]string{
+			"RegionId":     region,
+			"InstanceId":   instanceID,
+			"InstanceType": "EcsInstance",
+			"MaxResults":   "100",
+		})
+		if err != nil {
+			failures = append(failures, instanceID+": "+err.Error())
+			continue
+		}
+		items := mapsAt(eips, "EipAddresses.EipAddress")
+		if len(items) == 0 {
+			continue
+		}
+		first := items[0]
+		allocationID := stringValue(first["AllocationId"])
+		if allocationID == "" {
+			continue
+		}
+		resources[instanceID] = InstancePublicNetwork{
+			AllocationID: allocationID,
+			Address:      firstString(first, "IpAddress", "EipAddress", "Address"),
+			Bandwidth:    intValue(first["Bandwidth"]),
+		}
+	}
+	if len(failures) > 0 {
+		return resources, fmt.Errorf("current EIP lookup: %s", strings.Join(failures, "; "))
+	}
+	return resources, nil
 }
 
 func (s *Service) DescribeBillingResources(ctx context.Context, region string, instanceIDs []string) (map[string]BillingResource, error) {
@@ -1111,15 +1171,16 @@ func instanceFromMap(m map[string]any) Instance {
 	publicIP := firstIP(m, "PublicIpAddress", "EipAddress", "EIPAddress")
 	privateIP := firstNestedIP(m, "VpcAttributes", "PrivateIpAddress", "PrivateIpAddressSet")
 	return Instance{
-		ID:           stringValue(m["InstanceId"]),
-		Name:         stringValue(m["InstanceName"]),
-		Status:       stringValue(m["Status"]),
-		PublicIP:     publicIP,
-		PrivateIP:    privateIP,
-		InstanceType: firstString(m, "InstanceType", "InstanceTypeId"),
-		CPU:          firstInt(m, "Cpu", "CpuCoreCount", "CPU", "CoreCount"),
-		Memory:       firstInt(m, "Memory", "MemorySize", "MemoryMB", "MemorySizeInMB"),
-		OSName:       firstString(m, "OSName", "OSNameEn", "OSNameZh"),
+		ID:                stringValue(m["InstanceId"]),
+		Name:              stringValue(m["InstanceName"]),
+		Status:            stringValue(m["Status"]),
+		PublicIP:          publicIP,
+		PrivateIP:         privateIP,
+		InstanceType:      firstString(m, "InstanceType", "InstanceTypeId"),
+		CPU:               firstInt(m, "Cpu", "CpuCoreCount", "CPU", "CoreCount"),
+		Memory:            firstInt(m, "Memory", "MemorySize", "MemoryMB", "MemorySizeInMB"),
+		OSName:            firstString(m, "OSName", "OSNameEn", "OSNameZh"),
+		InternetBandwidth: firstInt(m, "InternetMaxBandwidthOut"),
 	}
 }
 

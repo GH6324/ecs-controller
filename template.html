@@ -697,6 +697,12 @@
             transform: translateY(-1px);
         }
 
+        .menu-button:focus-visible,
+        .settings-nav__button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
         .menu-button.active {
             border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
             background: var(--accent-light);
@@ -1733,6 +1739,7 @@
 
         .billing-modal {
             width: min(940px, 100%);
+            height: min(760px, calc(100vh - 32px));
             max-height: min(760px, calc(100vh - 32px));
             display: flex;
             flex-direction: column;
@@ -1775,11 +1782,26 @@
             font-variant-numeric: tabular-nums;
         }
 
+        .billing-content-stage {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .billing-content-view {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 0;
+        }
+
         .billing-history-list {
             display: grid;
+            flex: 1 1 auto;
+            align-content: start;
             gap: 9px;
             min-height: 0;
-            max-height: min(480px, 52vh);
             overflow: auto;
             margin-top: 14px;
             padding: 1px;
@@ -1804,6 +1826,22 @@
             border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
             background: color-mix(in srgb, var(--accent-light) 34%, var(--panel-strong));
             transform: translateY(-1px);
+        }
+
+        @keyframes billing-row-enter {
+            from {
+                transform: translateY(4px);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .billing-history-row,
+        .billing-details-table tbody tr {
+            animation: billing-row-enter .18s cubic-bezier(.2, .75, .25, 1) both;
+            animation-delay: var(--billing-enter-delay, 0ms);
+            will-change: transform;
         }
 
         .billing-history-row__date,
@@ -1868,8 +1906,8 @@
         }
 
         .billing-details-scroll {
+            flex: 1 1 auto;
             min-height: 0;
-            max-height: min(480px, 52vh);
             overflow: auto;
             margin-top: 14px;
             border: 1px solid var(--line);
@@ -2033,7 +2071,6 @@
 
             /* Turn the wide desktop table into readable bill entries on phones. */
             .billing-details-scroll {
-                max-height: min(500px, 56vh);
                 overflow-x: hidden;
                 border-radius: 14px;
                 scrollbar-gutter: auto;
@@ -2107,6 +2144,13 @@
             .billing-details-table__usage-billing,
             .billing-details-table__usage-config {
                 line-height: 1.42;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .billing-history-row,
+            .billing-details-table tbody tr {
+                animation: none;
             }
         }
 
@@ -2617,6 +2661,186 @@
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 16px;
+        }
+
+        .instance-status-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: 1.35rem;
+        }
+
+        .instance-status-card__header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .instance-status-card__eyebrow,
+        .instance-status-card__fact-label,
+        .instance-status-card__network-label,
+        .instance-status-card__traffic-label {
+            color: var(--muted);
+            font-size: .68rem;
+            font-weight: 750;
+            letter-spacing: .05em;
+            line-height: 1.2;
+        }
+
+        .instance-status-card__name {
+            margin-top: 4px;
+            color: var(--text);
+            font-size: 1.06rem;
+            font-weight: 850;
+            letter-spacing: -.02em;
+            line-height: 1.25;
+        }
+
+        .instance-status-card__account {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .instance-status-card__status {
+            display: flex;
+            flex: 0 0 auto;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+        }
+
+        .instance-status-card__facts {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 10px 16px;
+            margin-top: 20px;
+        }
+
+        .instance-status-card__fact {
+            min-width: 0;
+        }
+
+        .instance-status-card__fact-value {
+            margin-top: 5px;
+            color: var(--text);
+            font-size: .82rem;
+            font-weight: 650;
+            line-height: 1.35;
+        }
+
+        .instance-status-card__fact-value--system {
+            color: var(--muted);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: .76rem;
+            font-weight: 550;
+        }
+
+        .instance-status-card__fact-value--primary {
+            color: var(--text);
+            font-size: .94rem;
+            font-weight: 850;
+        }
+
+        .instance-status-card__network {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            border-top: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+            padding: 12px 2px 0;
+        }
+
+        .instance-status-card__network-divider {
+            width: 1px;
+            height: 28px;
+            background: var(--line);
+        }
+
+        .instance-status-card__network-value {
+            margin-top: 4px;
+            color: var(--text);
+            font-size: .8rem;
+            font-weight: 750;
+            line-height: 1.3;
+        }
+
+        .instance-status-card__network-value--ip {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-weight: 650;
+        }
+
+        .instance-status-card__traffic {
+            margin-top: 16px;
+            border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--accent-light) 56%, transparent);
+            padding: 11px 12px 12px;
+        }
+
+        .instance-status-card__traffic-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .instance-status-card__traffic-label {
+            color: var(--accent-strong);
+            letter-spacing: .02em;
+        }
+
+        .instance-status-card__traffic-percent {
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--accent) 12%, transparent);
+            color: var(--accent-strong);
+            padding: 3px 7px;
+            font-size: .68rem;
+            font-weight: 850;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+        }
+
+        .instance-status-card__traffic-percent.warning {
+            background: color-mix(in srgb, var(--danger) 12%, transparent);
+            color: var(--danger);
+        }
+
+        .instance-status-card__traffic-value {
+            margin-top: 4px;
+            color: var(--text);
+            font-size: .9rem;
+            font-weight: 850;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .instance-status-card__traffic-total {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 600;
+        }
+
+        .instance-status-card__traffic .progress-track {
+            height: 6px;
+            margin-top: 9px;
+            background: color-mix(in srgb, var(--accent) 15%, var(--panel));
+        }
+
+        .instance-status-card__footer.is-empty {
+            justify-content: flex-end;
+        }
+
+        .instance-status-card__footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
         }
 
         .settings-grid {
@@ -3270,8 +3494,10 @@
             border-radius: 14px;
             background: var(--accent);
             color: var(--accent-contrast);
-            font-size: 1.05rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: .72rem;
             font-weight: 900;
+            letter-spacing: .02em;
             box-shadow: 0 9px 20px color-mix(in srgb, var(--accent) 18%, transparent);
         }
 
@@ -3492,7 +3718,7 @@
         }
 
         .log-card {
-            border-radius: 22px !important;
+            border-radius: 14px !important;
             padding: 1rem !important;
         }
 
@@ -3614,9 +3840,18 @@
             }
         }
 
-        @media (max-width: 1279px) {
+        @media (max-width: 1280px) {
             .status-card-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            }
+
+            /* The management table has eight columns and becomes cramped before the mobile breakpoint. */
+            .manage-table-shell.desktop-visible {
+                display: none !important;
+            }
+
+            .mobile-manage-grid {
+                display: grid;
             }
 
             .settings-grid {
@@ -3789,6 +4024,11 @@
                 background: var(--accent-light);
                 color: var(--text);
                 box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+            }
+
+            .mobile-bottom-nav__button:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: 2px;
             }
 
             .mobile-bottom-nav__button span:last-child {
@@ -4202,14 +4442,14 @@
                         </div>
 
                         <div class="status-card-grid">
-                            <article v-for="item in filteredStatusInstances" :key="'card-' + item.id" class="metric-card">
-                                <div class="flex items-start justify-between gap-3">
+                            <article v-for="item in filteredStatusInstances" :key="'card-' + item.id" class="metric-card instance-status-card">
+                                <div class="instance-status-card__header">
                                     <div class="min-w-0">
-                                        <p class="subtle-label">备注</p>
-                                        <h3 class="mt-1 truncate text-lg font-bold">{{ item.remark || item.instanceName || item.instanceId }}</h3>
-                                        <p class="mt-1 text-xs text-[var(--muted)]">{{ item.accountLabel }}</p>
+                                        <p class="instance-status-card__eyebrow">实例备注</p>
+                                        <h3 class="instance-status-card__name truncate">{{ item.remark || item.instanceName || item.instanceId }}</h3>
+                                        <p class="instance-status-card__account">{{ item.accountLabel }}</p>
                                     </div>
-                                    <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                                    <div class="instance-status-card__status">
                                         <span v-if="!(item.status === 'Stopped' && item.stoppedMode === 'StopCharging')" class="status-pill" :class="statusClass(item.instanceStatus)">
                                             {{ statusText(item.instanceStatus) }}
                                         </span>
@@ -4222,47 +4462,46 @@
                                     </div>
                                 </div>
 
-                                <div class="mt-8 space-y-5">
-                                    <div class="grid grid-cols-2 gap-5">
-                                        <div class="min-w-0">
-                                            <p class="text-[13px] text-[var(--muted)] mb-1">硬件系统</p>
-                                            <p class="text-[14px] text-slate-700 truncate" :title="item.osName">{{ item.osName || '-' }}</p>
-                                        </div>
-                                        <div class="min-w-0">
-                                            <p class="text-[13px] text-[var(--muted)] mb-1">规格</p>
-                                            <p class="text-[14px] text-slate-700 font-semibold">{{ formatInstanceSpec(item) }}</p>
-                                        </div>
+                                <div class="instance-status-card__facts">
+                                    <div class="instance-status-card__fact">
+                                        <p class="instance-status-card__fact-label">镜像系统</p>
+                                        <p class="instance-status-card__fact-value instance-status-card__fact-value--system truncate" :title="item.osName">{{ item.osName || '-' }}</p>
                                     </div>
-                                    <div class="grid grid-cols-1">
-                                        <div class="min-w-0">
-                                            <p class="text-[13px] text-[var(--muted)] mb-1">公网 IP</p>
-                                            <p class="text-[14px] text-slate-700 font-mono">{{ isAdmin ? (item.publicIp || '-') : '登录后可见' }}</p>
-                                        </div>
+                                    <div class="instance-status-card__fact">
+                                        <p class="instance-status-card__fact-label">实例规格</p>
+                                        <p class="instance-status-card__fact-value instance-status-card__fact-value--primary">{{ formatInstanceSpec(item) }}</p>
                                     </div>
                                 </div>
 
-                                <div class="mt-8">
-                                    <div class="flex items-end justify-between mb-3">
-                                        <span class="text-[12px] text-[var(--muted)]">{{ item.trafficScope === 'account' ? '账号聚合流量' : 'CMS 实例流量' }} ({{ formatPercent(item.percentageOfUse) }}%)</span>
-                                        <span class="text-[15px] font-bold text-slate-800">
-                                            <template v-if="hasTrafficIssue(item)">
-                                                <span>{{ formatTrafficValue(item.flow_used) }}</span>
-                                                <span class="text-[var(--muted)] font-normal text-[14px]">/ {{ item.flow_total }} GB</span>
-                                            </template>
-                                            <template v-else>
-                                                {{ formatTrafficValue(item.flow_used) }} <span class="text-[var(--muted)] font-normal text-[14px]">/ {{ item.flow_total }} GB</span>
-                                            </template>
-                                        </span>
+                                <div class="instance-status-card__network">
+                                    <div class="min-w-0">
+                                        <p class="instance-status-card__network-label">公网 IP</p>
+                                        <p class="instance-status-card__network-value instance-status-card__network-value--ip truncate">{{ isAdmin ? (item.publicIp || '-') : '登录后可见' }}</p>
                                     </div>
-                                    <div class="progress-track h-2">
+                                    <span class="instance-status-card__network-divider" aria-hidden="true"></span>
+                                    <div class="min-w-0">
+                                        <p class="instance-status-card__network-label">带宽峰值</p>
+                                        <p class="instance-status-card__network-value">{{ isAdmin ? formatPublicBandwidth(item) : '登录后可见' }}</p>
+                                    </div>
+                                </div>
+
+                                <div class="instance-status-card__traffic">
+                                    <div class="instance-status-card__traffic-head">
+                                        <span class="instance-status-card__traffic-label">{{ item.trafficScope === 'account' ? '账号聚合流量' : 'CMS 实例流量' }}</span>
+                                        <span class="instance-status-card__traffic-percent" :class="{ warning: item.rate95 }">{{ formatPercent(item.percentageOfUse) }}%</span>
+                                    </div>
+                                    <p class="instance-status-card__traffic-value">
+                                        {{ formatTrafficValue(item.flow_used) }} <span class="instance-status-card__traffic-total">/ {{ item.flow_total }} GB</span>
+                                    </p>
+                                    <div class="progress-track">
                                         <div class="progress-fill h-full" :class="{ warning: item.rate95 }"
                                             :style="{ width: Math.min(item.percentageOfUse, 100) + '%' }"></div>
                                     </div>
                                     <p v-if="hasTrafficIssue(item)" class="mt-2 text-xs text-[#dc2626]">{{ trafficIssueText(item) }}</p>
                                 </div>
 
-                                <div class="mt-6 flex items-center justify-between pt-4 text-xs text-[var(--muted)]">
-                                    <div class="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+                                <div class="instance-status-card__footer text-xs text-[var(--muted)]" :class="{ 'is-empty': !item.lastUpdated }">
+                                    <div v-if="item.lastUpdated" class="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
                                         <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                         <span>{{ item.lastUpdated }}</span>
                                     </div>
@@ -4329,25 +4568,26 @@
                             </div>
                         </div>
 
-                        <div class="table-shell desktop-visible" style="margin-top: 24px;">
+                        <div class="table-shell desktop-visible manage-table-shell" style="margin-top: 24px;">
                             <div class="bg-white/65 px-5 py-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
                                 列表模式
                             </div>
                             <div class="overflow-x-auto">
-                                <div class="min-w-[980px]">
-                                    <div class="account-row summary-table-head" style="grid-template-columns: minmax(160px,1.25fr) 82px 70px minmax(120px,0.85fr) minmax(135px,0.95fr) minmax(115px,0.8fr) minmax(220px,1fr);">
+                                <div class="min-w-[1120px]">
+                                    <div class="account-row summary-table-head" style="grid-template-columns: minmax(145px,1.12fr) 82px 70px minmax(112px,0.82fr) minmax(128px,0.95fr) 112px minmax(120px,0.82fr) minmax(210px,1fr);">
                                     <div>账号 / 实例</div>
                                     <div>区域</div>
                                     <div>状态</div>
                                     <div>规格</div>
                                     <div>地址</div>
+                                    <div class="center-column">公网带宽峰值</div>
                                     <div class="center-column">CMS 实例流量</div>
                                     <div class="center-column">操作</div>
                                 </div>
 
                                 <div v-for="inst in filteredManagedInstances" :key="'manage-row-' + inst.id"
                                     class="account-row"
-                                    style="grid-template-columns: minmax(160px,1.25fr) 82px 70px minmax(120px,0.85fr) minmax(135px,0.95fr) minmax(115px,0.8fr) minmax(220px,1fr);">
+                                    style="grid-template-columns: minmax(145px,1.12fr) 82px 70px minmax(112px,0.82fr) minmax(128px,0.95fr) 112px minmax(120px,0.82fr) minmax(210px,1fr);">
                                     <div class="summary-cell">
                                         <div class="summary-primary truncate" :title="inst.accountLabel || inst.remark || inst.instanceName">{{ inst.accountLabel || inst.remark || inst.instanceName }}</div>
                                         <div class="summary-secondary font-mono truncate" :title="inst.instanceId">{{ inst.instanceId }}</div>
@@ -4360,11 +4600,13 @@
                                     </div>
                                     <div class="summary-cell">
                                         <div class="summary-primary text-sm">{{ inst.instanceType || '-' }}</div>
-                                        <div v-if="inst.internetMaxBandwidthOut" class="summary-secondary">{{ inst.internetMaxBandwidthOut }} Mbps</div>
                                     </div>
                                     <div class="summary-cell">
                                         <div class="summary-primary font-mono text-sm">{{ inst.publicIp || inst.privateIp || '-' }}</div>
                                         <div class="summary-secondary">{{ inst.publicIpMode === 'eip' ? 'EIP' : 'ECS 公网' }}</div>
+                                    </div>
+                                    <div class="summary-cell center-column">
+                                        <div class="summary-primary text-sm">{{ formatPublicBandwidth(inst) }}</div>
                                     </div>
                                     <div class="summary-cell center-column">
                                         <div class="account-usage">
@@ -4415,7 +4657,10 @@
                                     <div><span class="text-[var(--muted)]">区域</span><p class="mt-1">{{ inst.regionName }}</p></div>
                                     <div><span class="text-[var(--muted)]">状态</span><p class="mt-1"><span class="status-pill" :class="statusClass(inst.instanceStatus)">{{ statusText(inst.instanceStatus) }}</span></p></div>
                                     <div><span class="text-[var(--muted)]">地址</span><p class="mt-1 font-mono text-xs">{{ inst.publicIp || inst.privateIp || '-' }}</p><p class="mt-1 text-xs text-[var(--muted)]">{{ inst.publicIpMode === 'eip' ? 'EIP' : 'ECS 公网' }}</p></div>
-                                    <div><span class="text-[var(--muted)]">公网带宽峰值</span><p class="mt-1">{{ inst.internetMaxBandwidthOut ? inst.internetMaxBandwidthOut + ' Mbps' : '-' }}</p></div>
+                                    <div class="col-span-2 flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--panel-strong)_58%,transparent)] px-3 py-2">
+                                        <span class="text-[var(--muted)]">公网带宽峰值</span>
+                                        <p class="text-sm font-semibold">{{ formatPublicBandwidth(inst) }}</p>
+                                    </div>
                                 </div>
                                 <div v-if="inst.operationLocked || inst.instanceStatus === 'Releasing'" class="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">
                                     释放中，不可操作
@@ -4950,7 +5195,7 @@
 
                     <section v-if="currentMenu === 'about' && isAdmin" class="glass-panel section-panel about-section">
                         <div class="about-hero">
-                            <div class="about-hero__mark" aria-hidden="true">i</div>
+                            <div class="about-hero__mark" aria-hidden="true">06</div>
                             <div>
                                 <p class="subtle-label">项目说明</p>
                                 <h2 class="about-hero__title">关于 ECS Controller</h2>
@@ -5284,72 +5529,78 @@
             <div class="glass-panel account-modal billing-modal">
                 <div class="section-head">
                     <div>
-                        <p class="subtle-label">费用中心</p>
-                        <button v-if="selectedBillingDate" @click="backToBillingHistory" class="billing-details-back">← 返回历史消费</button>
-                        <h2 class="section-title">
-                            <template v-if="selectedBillingDate && selectedBillingDay">
-                                {{ formatBillingDate(selectedBillingDate) }}<span class="billing-details-title__amount">消费金额：{{ formatCurrencyValue(selectedBillingDay.total, billingDetails.currency) }}</span>
-                            </template>
-                            <template v-else>历史消费</template>
-                        </h2>
-                        <p class="mt-1 text-sm text-slate-500">{{ billingDetails.title }} · 云端账单可能存在延迟</p>
+                        <div>
+                            <p class="subtle-label">费用中心</p>
+                            <button v-if="selectedBillingDate" @click="backToBillingHistory" class="billing-details-back">← 返回历史消费</button>
+                            <h2 class="section-title">
+                                <template v-if="selectedBillingDate && selectedBillingDay">
+                                    {{ formatBillingDate(selectedBillingDate) }}<span class="billing-details-title__amount">消费金额：{{ formatCurrencyValue(selectedBillingDay.total, billingDetails.currency) }}</span>
+                                </template>
+                                <template v-else>历史消费</template>
+                            </h2>
+                            <p class="mt-1 text-sm text-slate-500">{{ billingDetails.title }} · 云端账单可能存在延迟</p>
+                        </div>
                     </div>
                     <button @click="closeBillingDetails" class="ghost-button compact-button">关闭</button>
                 </div>
 
-                <div v-if="!selectedBillingDate" class="billing-details-summary">
-                    <div>
-                        <div class="billing-details-summary__label">近 {{ billingDetails.days }} 日消费</div>
-                        <div class="billing-details-summary__value">{{ formatCurrencyValue(billingDetails.total, billingDetails.currency) }}</div>
-                    </div>
-                    <div class="billing-details-summary__meta">
-                        <div>{{ billingDetails.from }} 至 {{ billingDetails.to }}</div>
-                        <div v-if="billingDetails.last_updated">{{ billingDetails.last_updated }} 更新</div>
-                    </div>
-                </div>
-
-                <div v-if="billingDetailsLoading" class="billing-details-empty">正在查询阿里云账单...</div>
-                <div v-else-if="billingDetailsError" class="billing-details-empty text-red-600">{{ billingDetailsError }}</div>
-                <div v-else-if="billingDetails.items.length === 0" class="billing-details-empty">阿里云暂未返回这段时间的账单明细。</div>
-                <div v-else-if="!selectedBillingDate" class="billing-history-list">
-                    <button v-for="day in billingHistoryDays" :key="`billing-history-${day.date}`" class="billing-history-row" @click="openBillingDay(day.date)">
-                        <div class="billing-history-row__date">
-                            <div class="billing-history-row__date-label">{{ formatBillingDate(day.date) }}</div>
-                            <div class="billing-history-row__date-value">{{ day.date }}</div>
+                <div class="billing-content-stage">
+                    <div class="billing-content-view">
+                        <div v-if="!selectedBillingDate" class="billing-details-summary">
+                            <div>
+                                <div class="billing-details-summary__label">近 {{ billingDetails.days }} 日消费</div>
+                                <div class="billing-details-summary__value">{{ formatCurrencyValue(billingDetails.total, billingDetails.currency) }}</div>
+                            </div>
+                            <div class="billing-details-summary__meta">
+                                <div>{{ billingDetails.from }} 至 {{ billingDetails.to }}</div>
+                                <div v-if="billingDetails.last_updated">{{ billingDetails.last_updated }} 更新</div>
+                            </div>
                         </div>
-                        <div class="billing-history-row__products" :title="day.productSummary">{{ day.productSummary }}</div>
-                        <div class="billing-history-row__count">{{ day.count }} 项</div>
-                        <div class="billing-history-row__amount">{{ formatCurrencyValue(day.total, billingDetails.currency) }}</div>
-                        <div class="billing-history-row__arrow">查看 →</div>
-                    </button>
-                </div>
-                <div v-else class="billing-details-scroll">
-                    <table class="billing-details-table">
-                        <thead>
-                            <tr>
-                                <th>计费项目</th>
-                                <th title="账单累计用量与当前资源配置分开呈现，避免将计费单位误认为容量或数量">计费口径</th>
-                                <th>金额</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="(item, index) in selectedBillingDay?.items || []" :key="`billing-detail-${selectedBillingDate}-${index}`">
-                                <td>
-                                    <div class="billing-details-table__product">{{ item.product_name }}</div>
-                                    <div v-if="item.billing_item" class="billing-details-table__item">计费项目：{{ item.billing_item }}</div>
-                                    <div v-if="item.product_detail && item.product_detail !== item.product_name" class="billing-details-table__code">明细：{{ item.product_detail }}</div>
-                                    <div v-if="item.instance_id" class="billing-details-table__instance">账单资源：{{ item.instance_id }}</div>
-                                </td>
-                                <td class="billing-details-table__usage">
-                                    <div class="billing-details-table__usage-main">{{ billingUsagePresentation(item).primary }}</div>
-                                    <div v-if="billingUsagePresentation(item).current" class="billing-details-table__usage-current">{{ billingUsagePresentation(item).current }}</div>
-                                    <div v-if="billingUsagePresentation(item).billing" class="billing-details-table__usage-billing">{{ billingUsagePresentation(item).billing }}</div>
-                                    <div v-if="billingUsagePresentation(item).config" class="billing-details-table__usage-config">{{ billingUsagePresentation(item).config }}</div>
-                                </td>
-                                <td class="billing-details-table__amount">{{ formatCurrencyValue(item.amount, item.currency || billingDetails.currency) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+
+                        <div v-if="billingDetailsLoading" class="billing-details-empty">正在查询阿里云账单...</div>
+                        <div v-else-if="billingDetailsError" class="billing-details-empty text-red-600">{{ billingDetailsError }}</div>
+                        <div v-else-if="billingDetails.items.length === 0" class="billing-details-empty">阿里云暂未返回这段时间的账单明细。</div>
+                        <div v-else-if="!selectedBillingDate" class="billing-history-list">
+                            <button v-for="(day, index) in billingHistoryDays" :key="`billing-history-${day.date}`" class="billing-history-row" :style="{ '--billing-enter-delay': `${Math.min(index, 7) * 20}ms` }" @click="openBillingDay(day.date)">
+                                <div class="billing-history-row__date">
+                                    <div class="billing-history-row__date-label">{{ formatBillingDate(day.date) }}</div>
+                                    <div class="billing-history-row__date-value">{{ day.date }}</div>
+                                </div>
+                                <div class="billing-history-row__products" :title="day.productSummary">{{ day.productSummary }}</div>
+                                <div class="billing-history-row__count">{{ day.count }} 项</div>
+                                <div class="billing-history-row__amount">{{ formatCurrencyValue(day.total, billingDetails.currency) }}</div>
+                                <div class="billing-history-row__arrow">查看 →</div>
+                            </button>
+                        </div>
+                        <div v-else class="billing-details-scroll">
+                            <table class="billing-details-table">
+                                <thead>
+                                    <tr>
+                                        <th>计费项目</th>
+                                        <th title="账单累计用量与当前资源配置分开呈现，避免将计费单位误认为容量或数量">计费口径</th>
+                                        <th>金额</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(item, index) in selectedBillingDay?.items || []" :key="`billing-detail-${selectedBillingDate}-${index}`" :style="{ '--billing-enter-delay': `${Math.min(index, 8) * 16}ms` }">
+                                        <td>
+                                            <div class="billing-details-table__product">{{ item.product_name }}</div>
+                                            <div v-if="item.billing_item" class="billing-details-table__item">计费项目：{{ item.billing_item }}</div>
+                                            <div v-if="item.product_detail && item.product_detail !== item.product_name" class="billing-details-table__code">明细：{{ item.product_detail }}</div>
+                                            <div v-if="item.instance_id" class="billing-details-table__instance">账单资源：{{ item.instance_id }}</div>
+                                        </td>
+                                        <td class="billing-details-table__usage">
+                                            <div class="billing-details-table__usage-main">{{ billingUsagePresentation(item).primary }}</div>
+                                            <div v-if="billingUsagePresentation(item).current" class="billing-details-table__usage-current">{{ billingUsagePresentation(item).current }}</div>
+                                            <div v-if="billingUsagePresentation(item).billing" class="billing-details-table__usage-billing">{{ billingUsagePresentation(item).billing }}</div>
+                                            <div v-if="billingUsagePresentation(item).config" class="billing-details-table__usage-config">{{ billingUsagePresentation(item).config }}</div>
+                                        </td>
+                                        <td class="billing-details-table__amount">{{ formatCurrencyValue(item.amount, item.currency || billingDetails.currency) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="top-action-row" style="justify-content: flex-end; margin-top: 18px;">
@@ -6442,6 +6693,10 @@
                     }
                     const memoryLabel = memory < 1024 ? `${memory} MiB` : `${(memory / 1024).toFixed(1)} GiB`;
                     return `${cpu} 核 ${memoryLabel}`;
+                };
+                const formatPublicBandwidth = (item) => {
+                    const bandwidth = Number(item?.internetMaxBandwidthOut);
+                    return Number.isFinite(bandwidth) && bandwidth > 0 ? `${bandwidth} Mbps` : '未设置';
                 };
                 const hasTrafficIssue = (item) => {
                     const status = item?.trafficStatus || 'ok';
@@ -8516,6 +8771,7 @@
                     formatCurrencyValue,
                     billingUsagePresentation,
                     formatInstanceSpec,
+                    formatPublicBandwidth,
                     formatPercent,
                     formatTrafficValue,
                     formatTrafficUsage,

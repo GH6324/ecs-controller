@@ -625,11 +625,17 @@ func (f *fakePreflightClient) GetSystemDiskOptions(context.Context, string, stri
 
 type fakeSyncClient struct {
 	cloud.Client
-	instances []cloud.Instance
+	instances        []cloud.Instance
+	publicNetworks   map[string]cloud.InstancePublicNetwork
+	publicNetworkErr error
 }
 
 func (f *fakeSyncClient) DescribeInstances(context.Context, string) ([]cloud.Instance, error) {
 	return f.instances, nil
+}
+
+func (f *fakeSyncClient) DescribeInstancePublicNetworks(context.Context, string, []string) (map[string]cloud.InstancePublicNetwork, error) {
+	return f.publicNetworks, f.publicNetworkErr
 }
 
 type fakeBillingDetailsClient struct {
@@ -771,6 +777,48 @@ func TestSyncGroupPreservesReleaseAndQueuesMissingInstances(t *testing.T) {
 	job, err := st.ClaimJob(time.Minute)
 	if err != nil || job == nil || job.EntityKey != fmt.Sprint(missing.ID) {
 		t.Fatalf("missing cleanup job: %#v %v", job, err)
+	}
+}
+
+func TestSyncGroupRefreshesBoundEIPBandwidth(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	group := app.AccountGroup{GroupKey: "group-1", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-hongkong", MaxTraffic: 200}
+	if err := st.SaveGroups([]app.AccountGroup{group}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-hongkong", GroupKey: "group-1", InstanceID: "i-1", InternetBandwidth: 10, PublicIPMode: "ecs_public_ip"}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client {
+		return &fakeSyncClient{
+			instances: []cloud.Instance{{ID: "i-1", Status: "Running", PublicIP: "203.0.113.20"}},
+			publicNetworks: map[string]cloud.InstancePublicNetwork{
+				"i-1": {AllocationID: "eip-1", Address: "203.0.113.20", Bandwidth: 200},
+			},
+		}
+	}
+	if count, err := srv.syncGroup("group-1"); err != nil || count != 1 {
+		t.Fatalf("sync result: count=%d err=%v", count, err)
+	}
+	accounts, err := st.LoadAccounts(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts) != 1 {
+		t.Fatalf("accounts=%#v", accounts)
+	}
+	account := accounts[0]
+	if account.InternetBandwidth != 200 || account.PublicIPMode != "eip" || account.EIPAllocationID != "eip-1" || account.PublicIP != "203.0.113.20" {
+		t.Fatalf("EIP network was not refreshed: %#v", account)
+	}
+	if account.EIPManaged {
+		t.Fatal("externally discovered EIP was incorrectly marked controller-managed")
 	}
 }
 

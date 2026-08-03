@@ -458,3 +458,24 @@ func TestDescribeBillingResourcesMapsSystemDiskAndEIP(t *testing.T) {
 		t.Fatalf("unexpected resource lookup requests: %#v", requests)
 	}
 }
+
+func TestDescribeInstancePublicNetworksMapsEIPBandwidth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("Action") != "DescribeEipAddresses" || r.URL.Query().Get("InstanceId") != "i-1" {
+			t.Fatalf("unexpected EIP request: %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"EipAddresses": map[string]any{"EipAddress": []map[string]any{{"AllocationId": "eip-1", "IpAddress": "203.0.113.20", "Bandwidth": "200"}}}})
+	}))
+	defer server.Close()
+
+	client := &RPCClient{HTTPClient: server.Client(), Endpoint: server.URL, Version: "2016-04-28", Product: "Vpc", AccessKey: "ak", Secret: "sk"}
+	networks, err := (&Service{EIP: client}).DescribeInstancePublicNetworks(context.Background(), "cn-hongkong", []string{"i-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	network, ok := networks["i-1"]
+	if !ok || network.AllocationID != "eip-1" || network.Address != "203.0.113.20" || network.Bandwidth != 200 {
+		t.Fatalf("unexpected network: %#v", networks)
+	}
+}

@@ -1516,6 +1516,20 @@ func (s *Server) syncGroup(groupKey string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	publicNetworks := map[string]cloud.InstancePublicNetwork{}
+	publicNetworkSynced := false
+	if networkClient, ok := client.(cloud.InstancePublicNetworkClient); ok {
+		instanceIDs := make([]string, 0, len(instances))
+		for _, instance := range instances {
+			instanceIDs = append(instanceIDs, instance.ID)
+		}
+		if networks, networkErr := networkClient.DescribeInstancePublicNetworks(rctx(), group.RegionID, instanceIDs); networkErr != nil {
+			s.Log.Printf("同步实例公网带宽失败（账号组 %s）: %v", group.GroupKey, networkErr)
+		} else {
+			publicNetworks = networks
+			publicNetworkSynced = true
+		}
+	}
 	remoteIDs := make(map[string]bool, len(instances))
 	count := 0
 	for _, instance := range instances {
@@ -1534,7 +1548,17 @@ func (s *Server) syncGroup(groupKey string) (int, error) {
 			// while the remote ECS record is still visible.
 			continue
 		}
-		a := app.Account{AccessKeyID: group.AccessKeyID, AccessKeySecret: group.AccessKeySecret, RegionID: group.RegionID, InstanceID: instance.ID, MaxTraffic: group.MaxTraffic, ScheduleEnabled: group.ScheduleEnabled, ScheduleStartEnabled: group.ScheduleStartEnabled, ScheduleStopEnabled: group.ScheduleStopEnabled, StartTime: group.StartTime, StopTime: group.StopTime, Remark: group.Remark, SiteType: group.SiteType, GroupKey: group.GroupKey, InstanceName: instance.Name, InstanceType: instance.InstanceType, PublicIP: instance.PublicIP, PrivateIP: instance.PrivateIP, CPU: instance.CPU, Memory: instance.Memory, OSName: instance.OSName, InstanceStatus: instance.Status, HealthStatus: "ok", UpdatedAt: time.Now().Unix()}
+		a := app.Account{AccessKeyID: group.AccessKeyID, AccessKeySecret: group.AccessKeySecret, RegionID: group.RegionID, InstanceID: instance.ID, MaxTraffic: group.MaxTraffic, ScheduleEnabled: group.ScheduleEnabled, ScheduleStartEnabled: group.ScheduleStartEnabled, ScheduleStopEnabled: group.ScheduleStopEnabled, StartTime: group.StartTime, StopTime: group.StopTime, Remark: group.Remark, SiteType: group.SiteType, GroupKey: group.GroupKey, InstanceName: instance.Name, InstanceType: instance.InstanceType, InternetBandwidth: instance.InternetBandwidth, PublicIP: instance.PublicIP, PublicIPMode: "ecs_public_ip", PrivateIP: instance.PrivateIP, CPU: instance.CPU, Memory: instance.Memory, OSName: instance.OSName, InstanceStatus: instance.Status, HealthStatus: "ok", UpdatedAt: time.Now().Unix()}
+		if network, hasEIP := publicNetworks[instance.ID]; hasEIP {
+			a.PublicIPMode = "eip"
+			a.EIPAllocationID, a.EIPAddress = network.AllocationID, network.Address
+			if network.Address != "" {
+				a.PublicIP = network.Address
+			}
+			if network.Bandwidth > 0 {
+				a.InternetBandwidth = network.Bandwidth
+			}
+		}
 		if existing != nil {
 			// Keep local runtime state (traffic, schedules, protection flags and
 			// managed-network metadata) while refreshing cloud-owned fields.
@@ -1545,9 +1569,17 @@ func (s *Server) syncGroup(groupKey string) (int, error) {
 			a.ScheduleStopActive, a.ScheduleBlockedByTraffic = existing.ScheduleStopActive, existing.ScheduleBlockedByTraffic
 			a.TrafficAPIStatus, a.TrafficAPIMessage = existing.TrafficAPIStatus, existing.TrafficAPIMessage
 			a.ProtectionSuspended, a.ProtectionSuspendReason, a.ProtectionNotifiedAt = existing.ProtectionSuspended, existing.ProtectionSuspendReason, existing.ProtectionNotifiedAt
-			a.EIPAllocationID, a.EIPAddress, a.EIPManaged = existing.EIPAllocationID, existing.EIPAddress, existing.EIPManaged
-			a.PublicIPMode = existing.PublicIPMode
-			a.InternetBandwidth = existing.InternetBandwidth
+			if network, hasEIP := publicNetworks[instance.ID]; hasEIP {
+				// Only controller-created EIPs may be replaced from the UI.
+				a.EIPManaged = existing.EIPManaged && existing.EIPAllocationID == network.AllocationID
+			} else if !publicNetworkSynced {
+				// A failed EIP lookup must not erase known network metadata.
+				a.EIPAllocationID, a.EIPAddress, a.EIPManaged = existing.EIPAllocationID, existing.EIPAddress, existing.EIPManaged
+				a.PublicIPMode = existing.PublicIPMode
+				if a.InternetBandwidth < 1 {
+					a.InternetBandwidth = existing.InternetBandwidth
+				}
+			}
 			if a.PublicIPMode == "eip" && a.EIPAddress != "" {
 				a.PublicIP = a.EIPAddress
 			}

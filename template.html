@@ -7404,6 +7404,25 @@
                     return true;
                 };
 
+                const updateTargetAlreadyLoaded = (data) => {
+                    if (!updateReloadAttempted || !updatePollTarget) return false;
+                    const currentCommit = String(data?.current_commit || '').trim().toLowerCase();
+                    return Boolean(currentCommit && currentCommit === updatePollTarget);
+                };
+
+                const finishReloadedUpdate = () => {
+                    updatePending = false;
+                    updatePollTarget = '';
+                    updatePollRequestID = '';
+                    stopUpdatePolling();
+                    clearUpdateSession();
+                    updateReloadAttempted = false;
+                    updateReloadPending.value = false;
+                    hideUpdateScreen();
+                    openAlert('更新完成，已加载最新版本', 'success');
+                    void checkForUpdates({ silent: true });
+                };
+
                 const fetchUpdateStatus = async () => {
                     const pendingAtRequest = updatePending;
                     try {
@@ -7411,6 +7430,10 @@
                         if (!res.ok) throw new Error(`update status HTTP ${res.status}`);
                         const data = await res.json();
                         if (pendingAtRequest && !updateStatusMatchesPending(data)) {
+                            if (updateTargetAlreadyLoaded(data)) {
+                                finishReloadedUpdate();
+                                return;
+                            }
                             ensureUpdatePolling();
                             return;
                         }
@@ -7418,17 +7441,9 @@
                         if (['queued', 'running'].includes(updateState.value.status)) {
                             ensureUpdatePolling();
                         } else if (pendingAtRequest && updateState.value.status === 'success') {
-                            updatePending = false;
-                            stopUpdatePolling();
                             updateReloadPending.value = true;
                             if (updateReloadAttempted) {
-                                updatePollTarget = '';
-                                updatePollRequestID = '';
-                                clearUpdateSession();
-                                hideUpdateScreen();
-                                updateReloadPending.value = false;
-                                openAlert('更新完成，已加载最新版本', 'success');
-                                void checkForUpdates({ silent: true });
+                                finishReloadedUpdate();
                             } else {
                                 if (!updateScreenVisible.value) {
                                     startUpdateSimulation(updatePollStartedAt || Date.now());

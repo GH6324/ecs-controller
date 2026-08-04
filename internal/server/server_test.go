@@ -1027,6 +1027,40 @@ func TestOnlineUpdateRequestRequiresUpdaterAndPersistsTarget(t *testing.T) {
 	}
 }
 
+func TestUpdateStatusCompletesWhenControllerAlreadyRunsTargetCommit(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	updateDir := t.TempDir()
+	target := strings.Repeat("a", 40)
+	status := fmt.Sprintf(`{"status":"running","phase":"restarting","message":"正在重启 ECS Controller","progress":94,"target_commit":"%s","current_commit":"%s","request_id":"request-1","updated_at":%d}`, target, target, time.Now().Unix())
+	if err := os.WriteFile(filepath.Join(updateDir, "status.json"), []byte(status), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	previousCommit := app.Commit
+	app.Commit = target
+	defer func() { app.Commit = previousCommit }()
+
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.UpdateDir = updateDir
+	recorder := httptest.NewRecorder()
+	srv.updateStatus(recorder)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("update status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response["status"] != "success" || response["phase"] != "completed" || response["progress"] != float64(100) || response["current_commit"] != target {
+		t.Fatalf("target commit was not recognized as complete: %#v", response)
+	}
+}
+
 func postJSON(t *testing.T, client *http.Client, endpoint string, value map[string]any, headers map[string]string) *http.Response {
 	t.Helper()
 	raw, _ := json.Marshal(value)

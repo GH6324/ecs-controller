@@ -258,9 +258,11 @@ func (s *Server) prebuiltImageAvailable(ctx context.Context, commit string) (boo
 }
 
 func (s *Server) updateStatus(w http.ResponseWriter) {
+	currentCommit := strings.TrimSpace(app.Commit)
 	status := map[string]any{
-		"status":     "idle",
-		"configured": s.updateConfigured(),
+		"status":         "idle",
+		"configured":     s.updateConfigured(),
+		"current_commit": currentCommit,
 	}
 	if !s.updateConfigured() {
 		status["message"] = "当前部署未启用 Docker 在线更新"
@@ -274,6 +276,18 @@ func (s *Server) updateStatus(w http.ResponseWriter) {
 		if json.Unmarshal(raw, &stored) == nil {
 			for key, value := range stored {
 				status[key] = value
+			}
+			// The controller restarts before the updater writes its final status.
+			// If this process is already running the requested commit, the update
+			// has completed even when the status file is still in "restarting".
+			targetCommit := strings.TrimSpace(stringValue(stored["target_commit"]))
+			storedStatus := strings.TrimSpace(stringValue(stored["status"]))
+			if commitPattern.MatchString(currentCommit) && strings.EqualFold(targetCommit, currentCommit) && (storedStatus == "queued" || storedStatus == "running") {
+				status["status"] = "success"
+				status["phase"] = "completed"
+				status["message"] = "更新完成，当前已运行最新版本"
+				status["progress"] = 100
+				status["current_commit"] = currentCommit
 			}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {

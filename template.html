@@ -2579,6 +2579,14 @@
 
         .mobile-bottom-nav {
             display: none;
+            transition: transform .24s cubic-bezier(.22, .61, .36, 1), opacity .2s ease;
+            will-change: transform, opacity;
+        }
+
+        .mobile-bottom-nav.is-hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(calc(100% + 18px));
         }
 
         .section-panel {
@@ -2775,10 +2783,7 @@
 
         .instance-status-card__traffic {
             margin-top: 16px;
-            border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
-            border-radius: 12px;
-            background: color-mix(in srgb, var(--accent-light) 56%, transparent);
-            padding: 11px 12px 12px;
+            padding: 0;
         }
 
         .instance-status-card__traffic-head {
@@ -2794,18 +2799,23 @@
         }
 
         .instance-status-card__traffic-percent {
-            border-radius: 999px;
-            background: color-mix(in srgb, var(--accent) 12%, transparent);
-            color: var(--accent-strong);
-            padding: 3px 7px;
-            font-size: .68rem;
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+            color: var(--text);
+            font-size: .62rem;
             font-weight: 850;
             font-variant-numeric: tabular-nums;
             line-height: 1;
+            pointer-events: none;
+            text-shadow: 0 1px 2px color-mix(in srgb, var(--canvas) 42%, transparent);
         }
 
         .instance-status-card__traffic-percent.warning {
-            background: color-mix(in srgb, var(--danger) 12%, transparent);
             color: var(--danger);
         }
 
@@ -2823,10 +2833,16 @@
             font-weight: 600;
         }
 
-        .instance-status-card__traffic .progress-track {
-            height: 6px;
+        .instance-status-card__traffic-progress {
+            position: relative;
+            height: 20px;
             margin-top: 9px;
+            border-radius: 999px;
             background: color-mix(in srgb, var(--accent) 15%, var(--panel));
+        }
+
+        .instance-status-card__traffic-progress .progress-fill {
+            border-radius: inherit;
         }
 
         .instance-status-card__footer.is-empty {
@@ -4625,14 +4641,14 @@
                                 <div class="instance-status-card__traffic">
                                     <div class="instance-status-card__traffic-head">
                                         <span class="instance-status-card__traffic-label">{{ item.trafficScope === 'account' ? '账号聚合流量' : 'CMS 实例流量' }}</span>
-                                        <span class="instance-status-card__traffic-percent" :class="{ warning: item.rate95 }">{{ formatPercent(item.percentageOfUse) }}%</span>
                                     </div>
                                     <p class="instance-status-card__traffic-value">
                                         {{ formatTrafficValue(item.flow_used) }} <span class="instance-status-card__traffic-total">/ {{ item.flow_total }} GB</span>
                                     </p>
-                                    <div class="progress-track">
+                                    <div class="progress-track instance-status-card__traffic-progress" role="progressbar" :aria-valuenow="item.percentageOfUse" aria-valuemin="0" aria-valuemax="100" :aria-label="`流量使用率 ${formatPercent(item.percentageOfUse)}%`">
                                         <div class="progress-fill h-full" :class="{ warning: item.rate95 }"
                                             :style="{ width: Math.min(item.percentageOfUse, 100) + '%' }"></div>
+                                        <span class="instance-status-card__traffic-percent" :class="{ warning: item.rate95 }">{{ formatPercent(item.percentageOfUse) }}%</span>
                                     </div>
                                     <p v-if="hasTrafficIssue(item)" class="mt-2 text-xs text-[#dc2626]">{{ trafficIssueText(item) }}</p>
                                 </div>
@@ -4794,9 +4810,9 @@
                                     <div><span class="text-[var(--muted)]">账号</span><p class="mt-1 text-xs">{{ inst.accountLabel }}</p></div>
                                     <div><span class="text-[var(--muted)]">区域</span><p class="mt-1">{{ inst.regionName }}</p></div>
                                     <div><span class="text-[var(--muted)]">地址</span><p class="mt-1 font-mono text-xs">{{ inst.publicIp || inst.privateIp || '-' }}</p><p class="mt-1 text-xs text-[var(--muted)]">{{ inst.publicIpMode === 'eip' ? 'EIP' : 'ECS 公网' }}</p></div>
-                                    <div class="col-span-2 flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--panel-strong)_58%,transparent)] px-3 py-2">
+                                    <div>
                                         <span class="text-[var(--muted)]">公网带宽峰值</span>
-                                        <p class="text-sm font-semibold">{{ formatPublicBandwidth(inst) }}</p>
+                                        <p class="mt-1 text-sm font-semibold">{{ formatPublicBandwidth(inst) }}</p>
                                     </div>
                                 </div>
                                 <div v-if="inst.operationLocked || inst.instanceStatus === 'Releasing'" class="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">
@@ -5432,7 +5448,7 @@
                 </main>
             </div>
 
-            <nav v-if="initialized && !criticalError && isAdmin" class="mobile-bottom-nav">
+            <nav v-if="initialized && !criticalError && isAdmin" class="mobile-bottom-nav" :class="{ 'is-hidden': mobileNavHidden }">
                 <button
                     v-for="item in menuItems"
                     :key="'mobile-nav-' + item.key"
@@ -6508,6 +6524,7 @@
                 const validNotifyTabs = ['telegram', 'email', 'webhook'];
                 const validLogTabs = ['action', 'heartbeat'];
                 const currentMenu = ref(validMenus.includes(savedNavigation.menu) ? savedNavigation.menu : 'status');
+                const mobileNavHidden = ref(false);
                 const currentSettingsTab = ref(validSettingsTabs.includes(savedNavigation.settingsTab) ? savedNavigation.settingsTab : 'global');
                 const currentNotifyTab = ref(validNotifyTabs.includes(savedNavigation.notifyTab) ? savedNavigation.notifyTab : 'telegram');
                 const currentLogTab = ref(validLogTabs.includes(savedNavigation.logTab) ? savedNavigation.logTab : 'action');
@@ -6533,6 +6550,38 @@
                         }));
                     } catch (error) {
                         // Storage can be unavailable in private browsing or embedded contexts.
+                    }
+                };
+                let mobileNavLastScrollY = 0;
+                let mobileNavScrollFrame = 0;
+                const updateMobileNavVisibility = () => {
+                    const currentScrollY = Math.max(window.scrollY || 0, 0);
+                    const scrollDelta = currentScrollY - mobileNavLastScrollY;
+                    if (currentScrollY <= 16) {
+                        mobileNavHidden.value = false;
+                        mobileNavLastScrollY = currentScrollY;
+                        return;
+                    }
+                    if (Math.abs(scrollDelta) < 8) return;
+                    mobileNavHidden.value = scrollDelta > 0 && currentScrollY > 72;
+                    mobileNavLastScrollY = currentScrollY;
+                };
+                const handleMobileNavScroll = () => {
+                    if (mobileNavScrollFrame) return;
+                    mobileNavScrollFrame = window.requestAnimationFrame(() => {
+                        mobileNavScrollFrame = 0;
+                        updateMobileNavVisibility();
+                    });
+                };
+                const setupMobileNavScroll = () => {
+                    mobileNavLastScrollY = Math.max(window.scrollY || 0, 0);
+                    window.addEventListener('scroll', handleMobileNavScroll, { passive: true });
+                };
+                const teardownMobileNavScroll = () => {
+                    window.removeEventListener('scroll', handleMobileNavScroll);
+                    if (mobileNavScrollFrame) {
+                        window.cancelAnimationFrame(mobileNavScrollFrame);
+                        mobileNavScrollFrame = 0;
                     }
                 };
                 const logAutoRefresh = ref(false);
@@ -8923,10 +8972,12 @@
                 });
 
                 onMounted(() => {
+                    setupMobileNavScroll();
                     checkInitStatus();
                 });
 
                 onUnmounted(() => {
+                    teardownMobileNavScroll();
                     stopLogPolling();
                     stopStatusPolling();
                     stopManagePolling();
@@ -8960,6 +9011,7 @@
                     criticalError,
                     currentLogTab,
                     currentMenu,
+                    mobileNavHidden,
                     currentSettingsTab,
                     currentNotifyTab,
                     accountDraft,

@@ -7827,6 +7827,7 @@
 
                 const validateAccounts = () => {
                     const accounts = config.value.Accounts || [];
+                    const seenAccountRegions = new Set();
                     for (const account of accounts) {
                         const isEmpty = !account.AccessKeyId && !account.AccessKeySecret && !account.regionId && !account.remark;
                         if (isEmpty) continue;
@@ -7834,8 +7835,20 @@
                             openAlert('账号管理中存在未填完整的行，请补齐备注、AK、区域和账号流量。', 'error');
                             return false;
                         }
+                        const key = accountRegionKey(account);
+                        if (seenAccountRegions.has(key)) {
+                            openAlert('账号管理中存在重复的账号和区域组合，请更换区域。', 'error');
+                            return false;
+                        }
+                        seenAccountRegions.add(key);
                     }
                     return true;
+                };
+
+                const accountRegionKey = (account) => {
+                    const accessKeyID = String(account?.AccessKeyId || '').trim();
+                    const regionID = String(account?.regionId || '').trim().toLowerCase();
+                    return accessKeyID && regionID ? `${accessKeyID}|${regionID}` : '';
                 };
 
                 const persistConfig = async (successMessage = '配置已保存并完成实例同步') => {
@@ -8229,6 +8242,14 @@
                     const draft = accountDraft.value;
                     if (!draft.remark || !draft.AccessKeyId || !draft.AccessKeySecret || !draft.regionId || !draft.maxTraffic) {
                         openAlert('请填写完整的账号信息，包括备注、AK、区域和账号流量。', 'error');
+                        return false;
+                    }
+                    const draftKey = accountRegionKey(draft);
+                    const duplicateIndex = (config.value.Accounts || []).findIndex((account, index) => {
+                        return index !== editingAccountIndex.value && accountRegionKey(account) === draftKey;
+                    });
+                    if (duplicateIndex >= 0) {
+                        openAlert('该账号已经添加了这个区域，请选择其他区域。', 'error');
                         return false;
                     }
                     if (draft.scheduleEnabled) {

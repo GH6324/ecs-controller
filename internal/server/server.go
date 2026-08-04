@@ -758,6 +758,11 @@ func trafficScope(status string) string {
 }
 
 func (s *Server) saveConfig(data map[string]any) error {
+	if raw, ok := data["Accounts"].([]any); ok {
+		if err := validateAccountRegionUniqueness(raw); err != nil {
+			return err
+		}
+	}
 	threshold := number(data["traffic_threshold"], 95)
 	if threshold < 1 || threshold > 100 {
 		return fmt.Errorf("流量阈值必须在 1 到 100 之间")
@@ -886,6 +891,31 @@ func (s *Server) saveConfig(data map[string]any) error {
 				}
 			}
 		}
+	}
+	return nil
+}
+
+func validateAccountRegionUniqueness(raw []any) error {
+	seen := make(map[string]struct{}, len(raw))
+	for _, value := range raw {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			continue
+		}
+		var group app.AccountGroup
+		if err := json.Unmarshal(encoded, &group); err != nil {
+			continue
+		}
+		accessKeyID := strings.TrimSpace(group.AccessKeyID)
+		regionID := strings.ToLower(strings.TrimSpace(group.RegionID))
+		if accessKeyID == "" || regionID == "" {
+			continue
+		}
+		key := accessKeyID + "|" + regionID
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("账号与区域组合重复：同一账号不能重复添加相同区域")
+		}
+		seen[key] = struct{}{}
 	}
 	return nil
 }
@@ -1620,6 +1650,17 @@ func (s *Server) syncGroup(groupKey string) (int, error) {
 		}
 		sameGroup := account.GroupKey == group.GroupKey || (account.AccessKeyID == group.AccessKeyID && account.RegionID == group.RegionID)
 		if !sameGroup {
+			continue
+		}
+		if account.InstanceStatus == "ReleaseFailed" {
+			// A failed release is safe to forget only after a successful,
+			// complete DescribeInstances response confirms this exact instance ID
+			// no longer exists. Never use a reused IP address for this decision.
+			if removed, removeErr := s.Store.PhysicallyDeleteReleaseFailed(account.ID); removeErr != nil {
+				return count, removeErr
+			} else if removed {
+				s.Store.AddLog("info", "已清理云端不存在的释放失败残留记录: "+account.InstanceID)
+			}
 			continue
 		}
 		// The instance disappeared outside this controller. Route it through

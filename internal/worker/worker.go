@@ -104,6 +104,11 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 				oldStatus := account.InstanceStatus
 				instance, describeErr := client.DescribeInstance(ctx, account.RegionID, account.InstanceID)
 				if describeErr != nil {
+					if removed, cleanupErr := w.cleanupMissingReleaseFailed(account, describeErr); cleanupErr != nil {
+						w.Store.AddLog("warning", "清理释放失败残留记录失败: "+cleanupErr.Error())
+					} else if removed {
+						continue
+					}
 					metadata := map[string]any{"health_status": "error", "traffic_api_status": "unknown", "traffic_api_message": describeErr.Error()}
 					if cloud.IsCredentialError(describeErr) {
 						metadata["protection_suspended"] = true
@@ -194,6 +199,21 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 			w.runDailyTrafficSummary(ctx, now)
 		}
 	}
+}
+
+// cleanupMissingReleaseFailed retires a terminal local release failure after
+// the per-instance API confirms that the exact cloud instance is gone. This
+// deliberately does not touch EIPs or other resources because an address may
+// already have been reused by a replacement instance.
+func (w *Worker) cleanupMissingReleaseFailed(account app.Account, describeErr error) (bool, error) {
+	if account.InstanceStatus != "ReleaseFailed" || !cloud.IsNotFound(describeErr) {
+		return false, nil
+	}
+	removed, err := w.Store.PhysicallyDeleteReleaseFailed(account.ID)
+	if err == nil && removed {
+		w.Store.AddLog("info", "已清理云端不存在的释放失败残留记录: "+account.InstanceID)
+	}
+	return removed, err
 }
 
 func (w *Worker) protectionTraffic(ctx context.Context, client cloud.Client, account app.Account, cmsTraffic float64) (float64, string) {

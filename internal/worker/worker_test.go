@@ -369,6 +369,53 @@ func TestDeleteTaskStopsRunningInstanceBeforeDeletion(t *testing.T) {
 	}
 }
 
+func TestCleanupMissingReleaseFailedOnlyRetiresConfirmedNotFoundInstance(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", GroupKey: "g", InstanceID: "i-missing", InstanceStatus: "ReleaseFailed"}); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := s.LoadAccounts(false)
+	if err != nil || len(accounts) != 1 {
+		t.Fatalf("load account: %#v %v", accounts, err)
+	}
+	w := &Worker{Store: s}
+	removed, err := w.cleanupMissingReleaseFailed(accounts[0], &cloud.APIError{Code: "InvalidInstanceId.NotFound", HTTPStatus: 404})
+	if err != nil || !removed {
+		t.Fatalf("missing ReleaseFailed account was not retired: removed=%v err=%v", removed, err)
+	}
+	if _, err := s.Account(accounts[0].ID, false); err == nil {
+		t.Fatal("retired account remained visible")
+	}
+}
+
+func TestCleanupMissingReleaseFailedDoesNotRetireOnOtherErrors(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", GroupKey: "g", InstanceID: "i-unknown", InstanceStatus: "ReleaseFailed"}); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := s.LoadAccounts(false)
+	if err != nil || len(accounts) != 1 {
+		t.Fatalf("load account: %#v %v", accounts, err)
+	}
+	w := &Worker{Store: s}
+	removed, err := w.cleanupMissingReleaseFailed(accounts[0], fmt.Errorf("temporary cloud API failure"))
+	if err != nil || removed {
+		t.Fatalf("non-not-found error changed account: removed=%v err=%v", removed, err)
+	}
+	account, err := s.Account(accounts[0].ID, false)
+	if err != nil || account.InstanceStatus != "ReleaseFailed" {
+		t.Fatalf("account was not preserved: %#v %v", account, err)
+	}
+}
+
 func TestScheduleDue(t *testing.T) {
 	now := time.Date(2026, 7, 30, 21, 15, 0, 0, time.Local)
 	if !scheduleDue(now, "21:00", "2026-07-29") {

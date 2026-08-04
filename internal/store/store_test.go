@@ -61,6 +61,34 @@ func TestSecretsAndAccountsAreEncrypted(t *testing.T) {
 	}
 }
 
+func TestSaveGroupsRejectsDuplicateAccountRegion(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	duplicate := []app.AccountGroup{
+		{GroupKey: "group-hk-a", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-hongkong"},
+		{GroupKey: "group-hk-b", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "CN-HONGKONG"},
+	}
+	if err := s.SaveGroups(duplicate); err == nil {
+		t.Fatal("duplicate account and region was accepted")
+	}
+
+	differentRegions := []app.AccountGroup{
+		{GroupKey: "group-hk", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-hongkong"},
+		{GroupKey: "group-sg", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "ap-southeast-1"},
+	}
+	if err := s.SaveGroups(differentRegions); err != nil {
+		t.Fatalf("same account in different regions was rejected: %v", err)
+	}
+	loaded, err := s.LoadGroups()
+	if err != nil || len(loaded) != 2 {
+		t.Fatalf("different region groups were not saved: %#v, %v", loaded, err)
+	}
+}
+
 func TestPasskeyCredentialsAndChallengesAreEncryptedAndOneTime(t *testing.T) {
 	s, err := Open(t.TempDir())
 	if err != nil {

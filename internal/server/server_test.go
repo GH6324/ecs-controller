@@ -468,6 +468,28 @@ func TestNotificationSwitchesPersistAndReadBack(t *testing.T) {
 	}
 }
 
+func TestSaveConfigRejectsDuplicateAccountRegion(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	err = srv.saveConfig(map[string]any{
+		"Accounts": []any{
+			map[string]any{"AccessKeyId": "ak", "AccessKeySecret": "sk", "regionId": "cn-hongkong"},
+			map[string]any{"AccessKeyId": "ak", "AccessKeySecret": "sk", "regionId": "CN-HONGKONG"},
+		},
+	})
+	if err == nil {
+		t.Fatal("saveConfig accepted duplicate account and region")
+	}
+	if got := st.GetSetting("traffic_threshold", ""); got != "" {
+		t.Fatalf("duplicate configuration partially changed settings: %q", got)
+	}
+}
+
 func TestSaveConfigSyncsGroupWithGeneratedKey(t *testing.T) {
 	st, err := store.Open(t.TempDir())
 	if err != nil {
@@ -752,12 +774,13 @@ func TestRefreshAccountFallsBackToDeltaWhenMonthlyCMSHasNoPoints(t *testing.T) {
 type fakeSyncClient struct {
 	cloud.Client
 	instances        []cloud.Instance
+	describeErr      error
 	publicNetworks   map[string]cloud.InstancePublicNetwork
 	publicNetworkErr error
 }
 
 func (f *fakeSyncClient) DescribeInstances(context.Context, string) ([]cloud.Instance, error) {
-	return f.instances, nil
+	return f.instances, f.describeErr
 }
 
 func (f *fakeSyncClient) DescribeInstancePublicNetworks(context.Context, string, []string) (map[string]cloud.InstancePublicNetwork, error) {
@@ -903,6 +926,106 @@ func TestSyncGroupPreservesReleaseAndQueuesMissingInstances(t *testing.T) {
 	job, err := st.ClaimJob(time.Minute)
 	if err != nil || job == nil || job.EntityKey != fmt.Sprint(missing.ID) {
 		t.Fatalf("missing cleanup job: %#v %v", job, err)
+	}
+}
+
+func TestSyncGroupRemovesCloudMissingReleaseFailedRecords(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.SaveGroups([]app.AccountGroup{{GroupKey: "group-1", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", MaxTraffic: 200}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", GroupKey: "group-1", InstanceID: "i-old", PublicIP: "203.0.113.10", InstanceStatus: "ReleaseFailed"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client {
+		return &fakeSyncClient{instances: []cloud.Instance{{ID: "i-current", Status: "Running", PublicIP: "203.0.113.10"}}}
+	}
+	if count, err := srv.syncGroup("group-1"); err != nil || count != 1 {
+		t.Fatalf("sync result: count=%d err=%v", count, err)
+	}
+	visible, err := st.LoadAccounts(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(visible) != 1 || visible[0].InstanceID != "i-current" {
+		t.Fatalf("unexpected visible accounts: %#v", visible)
+	}
+	all, err := st.LoadAccounts(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var old *app.Account
+	for i := range all {
+		if all[i].InstanceID == "i-old" {
+			old = &all[i]
+		}
+	}
+	if old == nil || old.IsDeleted != 2 || old.InstanceStatus != "Released" {
+		t.Fatalf("release-failed orphan was not retired: %#v", old)
+	}
+	if job, err := st.ClaimJob(time.Second); err != nil || job != nil {
+		t.Fatalf("orphan cleanup unexpectedly queued another release job: job=%#v err=%v", job, err)
+	}
+}
+
+func TestSyncGroupKeepsReleaseFailedRecordWhenCloudSyncFails(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.SaveGroups([]app.AccountGroup{{GroupKey: "group-1", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", MaxTraffic: 200}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", GroupKey: "group-1", InstanceID: "i-old", InstanceStatus: "ReleaseFailed"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client {
+		return &fakeSyncClient{describeErr: fmt.Errorf("temporary DescribeInstances failure")}
+	}
+	if _, err := srv.syncGroup("group-1"); err == nil {
+		t.Fatal("sync unexpectedly succeeded")
+	}
+	account, err := st.Account(1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.InstanceStatus != "ReleaseFailed" {
+		t.Fatalf("failed cloud sync changed local release state: %#v", account)
+	}
+}
+
+func TestSyncGroupKeepsReleaseFailedRecordWhenInstanceStillExists(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.SaveGroups([]app.AccountGroup{{GroupKey: "group-1", AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", MaxTraffic: 200}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAccount(app.Account{AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", GroupKey: "group-1", InstanceID: "i-existing", InstanceStatus: "ReleaseFailed"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client {
+		return &fakeSyncClient{instances: []cloud.Instance{{ID: "i-existing", Status: "Running"}}}
+	}
+	if count, err := srv.syncGroup("group-1"); err != nil || count != 1 {
+		t.Fatalf("sync result: count=%d err=%v", count, err)
+	}
+	account, err := st.Account(1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.InstanceID != "i-existing" || account.InstanceStatus != "Running" {
+		t.Fatalf("existing cloud instance was not retained and refreshed: %#v", account)
 	}
 }
 

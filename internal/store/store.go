@@ -878,6 +878,18 @@ func (s *Store) PhysicallyDelete(id int64) error {
 	return err
 }
 
+// PhysicallyDeleteReleaseFailed removes only a terminal failed-release row.
+// The status guard prevents a concurrent retry from being hidden while a
+// cloud reconciliation is cleaning up an orphaned local record.
+func (s *Store) PhysicallyDeleteReleaseFailed(id int64) (bool, error) {
+	result, err := s.DB.Exec(`UPDATE accounts SET is_deleted=2,instance_status='Released',access_key_secret='' WHERE id=? AND is_deleted=0 AND instance_status='ReleaseFailed'`, id)
+	if err != nil {
+		return false, err
+	}
+	changed, err := result.RowsAffected()
+	return changed > 0, err
+}
+
 func (s *Store) UpdateAccountStatus(id int64, traffic float64, status string, updatedAt int64, metadata map[string]any) error {
 	query := `UPDATE accounts SET traffic_used=?,traffic_billing_month=?,instance_status=?,updated_at=?`
 	args := []any{traffic, time.Now().Format("2006-01"), status, updatedAt}
@@ -1026,6 +1038,19 @@ func (s *Store) UpdateLastKeepAlive(id int64, at int64) error {
 func (s *Store) SaveGroups(groups []app.AccountGroup) error {
 	copyGroups := make([]app.AccountGroup, len(groups))
 	copy(copyGroups, groups)
+	seenAccountRegions := make(map[string]struct{}, len(copyGroups))
+	for _, group := range copyGroups {
+		accessKeyID := strings.TrimSpace(group.AccessKeyID)
+		regionID := strings.ToLower(strings.TrimSpace(group.RegionID))
+		if accessKeyID == "" || regionID == "" {
+			continue
+		}
+		key := accessKeyID + "|" + regionID
+		if _, exists := seenAccountRegions[key]; exists {
+			return fmt.Errorf("账号与区域组合重复：同一账号不能重复添加相同区域")
+		}
+		seenAccountRegions[key] = struct{}{}
+	}
 	secrets := map[string]string{}
 	var existingSecrets map[string]string
 	_ = json.Unmarshal([]byte(s.GetSetting("account_group_secrets", "{}")), &existingSecrets)

@@ -1388,36 +1388,55 @@ func (s *Server) refreshAccount(w http.ResponseWriter, data map[string]any) {
 	now := time.Now()
 	month := now.Format("2006-01")
 	endMS := now.UnixMilli()
+	a.TrafficBillingMonth = month
 	sample, sampleErr := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
 	if sampleErr != nil {
 		s.error(w, 500, "流量账本读取失败")
 		return
 	}
-	startMS := sample.LastSampleMS
-	if startMS <= 0 || startMS >= endMS {
-		startMS = endMS - int64(10*time.Minute/time.Millisecond)
-	}
 	trafficUpdated := false
-	traffic, lastMS, points, _, metricErr := client.GetOutboundTrafficDelta(rctx(), a.RegionID, a.InstanceID, a.PublicIP, startMS, endMS)
-	if metricErr == nil {
-		if points > 0 {
-			if _, err := s.Store.AddInstanceTraffic(a.ID, a.InstanceID, month, traffic, lastMS); err != nil {
+	if monthlyClient, ok := client.(cloud.MonthlyTrafficClient); ok {
+		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).UnixMilli()
+		if monthlyBytes, points, monthlyErr := monthlyClient.GetInstanceMonthlyTraffic(rctx(), a.RegionID, a.InstanceID, a.PublicIP, monthStart, endMS); monthlyErr == nil && points > 0 {
+			if _, err := s.Store.SetInstanceTraffic(a.ID, a.InstanceID, month, monthlyBytes, endMS); err != nil {
 				s.error(w, 500, "流量账本保存失败")
 				return
 			}
+			updated, _ := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
+			a.TrafficUsed = updated.TrafficBytes / (1024 * 1024 * 1024)
+			a.TrafficAPIStatus = "ok"
+			a.TrafficAPIMessage = ""
+			a.ProtectionSuspended = false
+			a.ProtectionSuspendReason = ""
+			trafficUpdated = true
 		}
-		updated, _ := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
-		a.TrafficUsed = updated.TrafficBytes / (1024 * 1024 * 1024)
-		a.TrafficAPIStatus = "ok"
-		a.TrafficAPIMessage = ""
-		a.ProtectionSuspended = false
-		a.ProtectionSuspendReason = ""
-		trafficUpdated = true
-	} else {
-		a.TrafficAPIStatus = "error"
-		a.TrafficAPIMessage = cmsTrafficErrorMessage(metricErr)
-		a.ProtectionSuspended = true
-		a.ProtectionSuspendReason = "traffic_api_error"
+	}
+	if !trafficUpdated {
+		startMS := sample.LastSampleMS
+		if startMS <= 0 || startMS >= endMS {
+			startMS = endMS - int64(10*time.Minute/time.Millisecond)
+		}
+		traffic, lastMS, points, _, metricErr := client.GetOutboundTrafficDelta(rctx(), a.RegionID, a.InstanceID, a.PublicIP, startMS, endMS)
+		if metricErr == nil {
+			if points > 0 {
+				if _, err := s.Store.AddInstanceTraffic(a.ID, a.InstanceID, month, traffic, lastMS); err != nil {
+					s.error(w, 500, "流量账本保存失败")
+					return
+				}
+			}
+			updated, _ := s.Store.InstanceTrafficUsage(a.ID, a.InstanceID, month)
+			a.TrafficUsed = updated.TrafficBytes / (1024 * 1024 * 1024)
+			a.TrafficAPIStatus = "ok"
+			a.TrafficAPIMessage = ""
+			a.ProtectionSuspended = false
+			a.ProtectionSuspendReason = ""
+			trafficUpdated = true
+		} else {
+			a.TrafficAPIStatus = "error"
+			a.TrafficAPIMessage = cmsTrafficErrorMessage(metricErr)
+			a.ProtectionSuspended = true
+			a.ProtectionSuspendReason = "traffic_api_error"
+		}
 	}
 	if trafficUpdated {
 		_ = s.Store.AddTrafficHistory(a.ID, a.TrafficUsed, now)

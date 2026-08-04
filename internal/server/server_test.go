@@ -623,6 +623,132 @@ func (f *fakePreflightClient) GetSystemDiskOptions(context.Context, string, stri
 	return []map[string]any{{"value": "cloud_essd", "label": "ESSD", "min": 40, "max": 100, "unit": "GB"}}, nil
 }
 
+type fakeRefreshClient struct {
+	cloud.Client
+	instance      cloud.Instance
+	monthlyBytes  float64
+	monthlyPoints int
+	monthlyErr    error
+	monthlyCalls  int
+	deltaBytes    float64
+	deltaLastMS   int64
+	deltaPoints   int
+	deltaErr      error
+	deltaCalls    int
+}
+
+func (f *fakeRefreshClient) DescribeInstance(context.Context, string, string) (*cloud.Instance, error) {
+	instance := f.instance
+	return &instance, nil
+}
+
+func (f *fakeRefreshClient) GetInstanceMonthlyTraffic(context.Context, string, string, string, int64, int64) (float64, int, error) {
+	f.monthlyCalls++
+	return f.monthlyBytes, f.monthlyPoints, f.monthlyErr
+}
+
+func (f *fakeRefreshClient) GetOutboundTrafficDelta(context.Context, string, string, string, int64, int64) (float64, int64, int, string, error) {
+	f.deltaCalls++
+	return f.deltaBytes, f.deltaLastMS, f.deltaPoints, "InternetOutRate", f.deltaErr
+}
+
+func TestRefreshAccountUsesMonthlyCMSValueBeforeDelta(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if err := st.UpsertAccount(app.Account{
+		ID:              1,
+		AccessKeyID:     "ak",
+		AccessKeySecret: "sk",
+		RegionID:        "cn-hongkong",
+		InstanceID:      "i-1",
+		PublicIP:        "203.0.113.10",
+		TrafficUsed:     0.0008,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	month := now.Format("2006-01")
+	if _, err := st.SetInstanceTraffic(1, "i-1", month, 0.0008*1024*1024*1024, now.Add(-5*time.Minute).UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeRefreshClient{
+		instance:      cloud.Instance{ID: "i-1", Status: "Running", PublicIP: "203.0.113.10"},
+		monthlyBytes:  8 * 1024 * 1024 * 1024,
+		monthlyPoints: 1,
+		deltaBytes:    10 * 1024 * 1024,
+		deltaLastMS:   now.UnixMilli(),
+		deltaPoints:   1,
+	}
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client { return fake }
+	recorder := httptest.NewRecorder()
+	srv.refreshAccount(recorder, map[string]any{"id": 1})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("refresh status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if fake.monthlyCalls != 1 || fake.deltaCalls != 0 {
+		t.Fatalf("unexpected CMS calls: monthly=%d delta=%d", fake.monthlyCalls, fake.deltaCalls)
+	}
+
+	sample, err := st.InstanceTrafficUsage(1, "i-1", month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sample.TrafficBytes != 8*1024*1024*1024 {
+		t.Fatalf("monthly CMS value was not stored absolutely: got=%v", sample.TrafficBytes)
+	}
+	account, err := st.Account(1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.TrafficUsed != 8 || account.TrafficBillingMonth != month || account.TrafficAPIStatus != "ok" {
+		t.Fatalf("account traffic state=%+v", account)
+	}
+}
+
+func TestRefreshAccountFallsBackToDeltaWhenMonthlyCMSHasNoPoints(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if err := st.UpsertAccount(app.Account{ID: 1, AccessKeyID: "ak", AccessKeySecret: "sk", RegionID: "cn-test", InstanceID: "i-1"}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	month := now.Format("2006-01")
+	fake := &fakeRefreshClient{
+		instance:      cloud.Instance{ID: "i-1", Status: "Running"},
+		monthlyPoints: 0,
+		deltaBytes:    12 * 1024 * 1024,
+		deltaLastMS:   now.UnixMilli(),
+		deltaPoints:   1,
+	}
+	srv := New(st, t.TempDir(), "", "setup-token", nil)
+	srv.CloudFactory = func(app.Account) cloud.Client { return fake }
+	recorder := httptest.NewRecorder()
+	srv.refreshAccount(recorder, map[string]any{"id": 1})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("refresh status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if fake.monthlyCalls != 1 || fake.deltaCalls != 1 {
+		t.Fatalf("monthly no-data did not fall back to delta: monthly=%d delta=%d", fake.monthlyCalls, fake.deltaCalls)
+	}
+	sample, err := st.InstanceTrafficUsage(1, "i-1", month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sample.TrafficBytes != 12*1024*1024 {
+		t.Fatalf("delta fallback was not stored: got=%v", sample.TrafficBytes)
+	}
+}
+
 type fakeSyncClient struct {
 	cloud.Client
 	instances        []cloud.Instance

@@ -4784,15 +4784,15 @@
                         <div class="mobile-manage-grid">
                             <article v-for="inst in filteredManagedInstances" :key="'manage-card-' + inst.id" class="metric-card">
                                 <div class="flex items-start justify-between gap-3">
-                                    <div>
+                                    <div class="min-w-0">
                                         <p class="text-base font-bold">{{ inst.remark || inst.instanceName || inst.instanceId }}</p>
                                         <p class="mt-1 font-mono text-xs text-[var(--muted)]">{{ inst.instanceId }}</p>
                                     </div>
+                                    <span class="status-pill shrink-0" :class="statusClass(inst.instanceStatus)">{{ statusText(inst.instanceStatus) }}</span>
                                 </div>
                                 <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
                                     <div><span class="text-[var(--muted)]">账号</span><p class="mt-1 text-xs">{{ inst.accountLabel }}</p></div>
                                     <div><span class="text-[var(--muted)]">区域</span><p class="mt-1">{{ inst.regionName }}</p></div>
-                                    <div><span class="text-[var(--muted)]">状态</span><p class="mt-1"><span class="status-pill" :class="statusClass(inst.instanceStatus)">{{ statusText(inst.instanceStatus) }}</span></p></div>
                                     <div><span class="text-[var(--muted)]">地址</span><p class="mt-1 font-mono text-xs">{{ inst.publicIp || inst.privateIp || '-' }}</p><p class="mt-1 text-xs text-[var(--muted)]">{{ inst.publicIpMode === 'eip' ? 'EIP' : 'ECS 公网' }}</p></div>
                                     <div class="col-span-2 flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--panel-strong)_58%,transparent)] px-3 py-2">
                                         <span class="text-[var(--muted)]">公网带宽峰值</span>

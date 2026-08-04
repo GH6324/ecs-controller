@@ -5040,8 +5040,8 @@
 
                             <div v-if="currentSettingsTab === 'notifications'" class="metric-card">
                                 <div class="tab-pill-group">
-                                    <button @click="currentNotifyTab = 'email'" class="ghost-button" :class="{ 'text-dark-button': currentNotifyTab === 'email' }">邮件</button>
                                     <button @click="currentNotifyTab = 'telegram'" class="ghost-button" :class="{ 'text-dark-button': currentNotifyTab === 'telegram' }">Telegram</button>
+                                    <button @click="currentNotifyTab = 'email'" class="ghost-button" :class="{ 'text-dark-button': currentNotifyTab === 'email' }">邮件</button>
                                     <button @click="currentNotifyTab = 'webhook'" class="ghost-button" :class="{ 'text-dark-button': currentNotifyTab === 'webhook' }">接口回调</button>
                                 </div>
 
@@ -6340,11 +6340,11 @@
                 const savedNavigation = readNavigationState();
                 const validMenus = ['status', 'manage', 'accounts', 'settings', 'logs', 'about'];
                 const validSettingsTabs = ['global', 'ddns', 'notifications'];
-                const validNotifyTabs = ['email', 'telegram', 'webhook'];
+                const validNotifyTabs = ['telegram', 'email', 'webhook'];
                 const validLogTabs = ['action', 'heartbeat'];
                 const currentMenu = ref(validMenus.includes(savedNavigation.menu) ? savedNavigation.menu : 'status');
                 const currentSettingsTab = ref(validSettingsTabs.includes(savedNavigation.settingsTab) ? savedNavigation.settingsTab : 'global');
-                const currentNotifyTab = ref(validNotifyTabs.includes(savedNavigation.notifyTab) ? savedNavigation.notifyTab : 'email');
+                const currentNotifyTab = ref(validNotifyTabs.includes(savedNavigation.notifyTab) ? savedNavigation.notifyTab : 'telegram');
                 const currentLogTab = ref(validLogTabs.includes(savedNavigation.logTab) ? savedNavigation.logTab : 'action');
                 const passkeySecureContext = typeof window !== 'undefined' && (
                     window.isSecureContext || ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
@@ -6732,6 +6732,8 @@
                 const diskCategoryText = (category) => ({
                     cloud_essd_entry: 'ESSD Entry 云盘',
                     cloud_essd: '增强型固态盘',
+                    cloud_auto: 'ESSD AutoPL 云盘',
+                    cloud_ssd: 'SSD 云盘',
                     cloud_efficiency: '高效云盘',
                     cloud: '普通云盘'
                 }[category] || category || '-');
@@ -6756,8 +6758,8 @@
                     }
                     return ecsDiskCategoryOptions.value.map((item) => ({
                         value: item.value,
-                        label: item.label
-                    }));
+                        label: item.label || diskCategoryText(item.value)
+                    })).filter((item) => item.value);
                 });
                 const getAccountKey = (account, index) => account?.groupKey || `${account?.remark || 'account'}-${account?.regionId || 'region'}-${index}`;
                 const isRefreshingInstance = (id) => refreshingInstanceIds.value.includes(id);

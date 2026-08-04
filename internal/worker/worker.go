@@ -22,6 +22,13 @@ type Worker struct {
 	Log          *log.Logger
 }
 
+func cmsTrafficErrorMessage(err error) string {
+	if cloud.IsMetricNoDataError(err) {
+		return "云端数据尚未更新，请稍后再试"
+	}
+	return "CMS 实例流量暂不可用: " + err.Error()
+}
+
 func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 	if interval < 30*time.Second {
 		interval = 30 * time.Second
@@ -124,7 +131,7 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 					if cloud.IsCredentialError(trafficErr) {
 						reason = "credential_invalid"
 					}
-					account.TrafficAPIStatus, account.TrafficAPIMessage = "error", trafficErr.Error()
+					account.TrafficAPIStatus, account.TrafficAPIMessage = "error", trafficMessage
 					account.ProtectionSuspended, account.ProtectionSuspendReason = true, reason
 					account.UpdatedAt, account.TrafficBillingMonth = now.Unix(), now.Format("2006-01")
 					// CMS may be delayed or temporarily unavailable. A failed CMS
@@ -393,7 +400,7 @@ func (w *Worker) refreshTraffic(ctx context.Context, client cloud.Client, accoun
 	}
 	delta, lastMS, points, _, metricErr := client.GetOutboundTrafficDelta(ctx, account.RegionID, account.InstanceID, account.PublicIP, startMS, endMS)
 	if metricErr != nil {
-		return 0, "error", "CMS 实例流量暂不可用: " + metricErr.Error(), metricErr
+		return 0, "error", cmsTrafficErrorMessage(metricErr), metricErr
 	}
 	if points > 0 {
 		sample, err = w.Store.AddInstanceTraffic(account.ID, account.InstanceID, month, delta, lastMS)

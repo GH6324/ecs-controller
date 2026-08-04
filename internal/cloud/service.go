@@ -840,7 +840,7 @@ func (s *Service) GetOutboundTrafficDelta(ctx context.Context, region, instanceI
 		if count > 0 {
 			return bytes, last, count, candidate.name, nil
 		}
-		lastErr = fmt.Errorf("CMS metric %s returned no datapoints", candidate.name)
+		lastErr = fmt.Errorf("%w: CMS metric %s returned no datapoints", ErrMetricNoData, candidate.name)
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("CMS returned no usable datapoints")
@@ -912,10 +912,10 @@ func (s *Service) getInstanceTrafficWindow(ctx context.Context, region, instance
 		if count > 0 {
 			return bytes, count, nil
 		}
-		lastErr = fmt.Errorf("CMS metric %s returned no traffic datapoints", candidate.name)
+		lastErr = fmt.Errorf("%w: CMS metric %s returned no traffic datapoints", ErrMetricNoData, candidate.name)
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("CMS returned no traffic datapoints")
+		lastErr = fmt.Errorf("%w: CMS returned no traffic datapoints", ErrMetricNoData)
 	}
 	return 0, 0, lastErr
 }
@@ -1164,7 +1164,20 @@ func firstInt(m map[string]any, keys ...string) int {
 }
 
 func diskCategoryLabel(category string) string {
-	return map[string]string{"cloud_essd_entry": "ESSD Entry", "cloud_essd": "ESSD", "cloud_efficiency": "高效云盘", "cloud": "普通云盘"}[category]
+	labels := map[string]string{
+		"cloud_essd_entry": "ESSD Entry",
+		"cloud_essd":       "ESSD",
+		"cloud_auto":       "ESSD AutoPL",
+		"cloud_ssd":        "SSD 云盘",
+		"cloud_efficiency": "高效云盘",
+		"cloud":            "普通云盘",
+	}
+	if label := labels[category]; label != "" {
+		return label
+	}
+	// Keep newly introduced Alibaba disk categories selectable instead of
+	// rendering an option with an empty label.
+	return category
 }
 
 func instanceFromMap(m map[string]any) Instance {

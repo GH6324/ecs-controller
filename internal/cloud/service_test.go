@@ -118,6 +118,17 @@ func TestDiskOptionsResponseNestedSupportedResources(t *testing.T) {
 	}
 }
 
+func TestDiskCategoryLabelsNeverRenderBlank(t *testing.T) {
+	for _, category := range []string{"cloud_essd_entry", "cloud_essd", "cloud_auto", "cloud_unknown"} {
+		if label := diskCategoryLabel(category); label == "" {
+			t.Fatalf("disk category %q has an empty label", category)
+		}
+	}
+	if diskCategoryLabel("cloud_auto") != "ESSD AutoPL" {
+		t.Fatalf("unexpected ESSD AutoPL label: %q", diskCategoryLabel("cloud_auto"))
+	}
+}
+
 func TestOutboundTrafficUsesCMSDimensionObject(t *testing.T) {
 	var dimensions []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -132,8 +143,17 @@ func TestOutboundTrafficUsesCMSDimensionObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("empty CMS datapoints were accepted as a zero-traffic sample")
 	}
+	if !IsMetricNoDataError(err) {
+		t.Fatalf("empty CMS datapoints were not classified as delayed cloud data: %v", err)
+	}
 	if len(dimensions) != 2 || dimensions[0] != `{"instanceId":"i-1","ip":"203.0.113.10"}` || dimensions[1] != `{"instanceId":"i-1"}` {
 		t.Fatalf("unexpected CMS dimensions: %#v", dimensions)
+	}
+}
+
+func TestMetricNoDataErrorDoesNotMatchRegularAPIError(t *testing.T) {
+	if IsMetricNoDataError(fmt.Errorf("aliyun Throttling.User: request was denied")) {
+		t.Fatal("regular API errors must not be classified as missing metric data")
 	}
 }
 

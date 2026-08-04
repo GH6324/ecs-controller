@@ -456,14 +456,17 @@ func (w *Worker) refreshTelegramAccount(ctx context.Context, id int64) error {
 		_ = w.Store.AddTrafficHistory(a.ID, traffic, now)
 	} else {
 		a.TrafficAPIStatus = "error"
-		a.TrafficAPIMessage = trafficErr.Error()
+		a.TrafficAPIMessage = cmsTrafficErrorMessage(trafficErr)
 		a.ProtectionSuspended = true
 		a.ProtectionSuspendReason = "traffic_api_error"
 	}
 	if err := w.Store.UpsertAccount(*a); err != nil {
 		return err
 	}
-	return trafficErr
+	if trafficErr != nil {
+		return fmt.Errorf("%s", cmsTrafficErrorMessage(trafficErr))
+	}
+	return nil
 }
 
 func (w *Worker) refreshAllTelegramData(ctx context.Context) error {

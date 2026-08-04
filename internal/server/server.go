@@ -1353,6 +1353,13 @@ func allocateEIP(ctx context.Context, client cloud.Client, region string, bandwi
 	return client.AllocateEIP(ctx, region)
 }
 
+func cmsTrafficErrorMessage(err error) string {
+	if cloud.IsMetricNoDataError(err) {
+		return "云端数据尚未更新，请稍后再试"
+	}
+	return "CMS 实例流量暂不可用: " + err.Error()
+}
+
 func (s *Server) refreshAccount(w http.ResponseWriter, data map[string]any) {
 	id := int64(number(data["id"], number(data["accountId"], 0)))
 	a, err := s.Store.Account(id, false)
@@ -1408,7 +1415,7 @@ func (s *Server) refreshAccount(w http.ResponseWriter, data map[string]any) {
 		trafficUpdated = true
 	} else {
 		a.TrafficAPIStatus = "error"
-		a.TrafficAPIMessage = "CMS 实例流量暂不可用: " + metricErr.Error()
+		a.TrafficAPIMessage = cmsTrafficErrorMessage(metricErr)
 		a.ProtectionSuspended = true
 		a.ProtectionSuspendReason = "traffic_api_error"
 	}
@@ -1670,7 +1677,11 @@ func (s *Server) testAccount(w http.ResponseWriter, data map[string]any) {
 		end := time.Now().Add(-90 * time.Second).Truncate(time.Minute).UnixMilli()
 		_, _, _, _, metricErr := client.GetOutboundTrafficDelta(rctx(), region, probe.ID, probe.PublicIP, end-10*60*1000, end)
 		if metricErr != nil {
-			monitorStatus, monitorMessage = "warning", "云监控流量探测未通过: "+metricErr.Error()
+			monitorMessage = "云监控流量探测未通过: " + metricErr.Error()
+			if cloud.IsMetricNoDataError(metricErr) {
+				monitorMessage = "云端数据尚未更新，请稍后再试"
+			}
+			monitorStatus = "warning"
 		} else {
 			monitorStatus, monitorMessage = "ok", "云监控接口已接通，可获取实例流量"
 		}

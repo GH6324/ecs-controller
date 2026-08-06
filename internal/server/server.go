@@ -1297,7 +1297,7 @@ func (s *Server) control(w http.ResponseWriter, data map[string]any) {
 		s.error(w, 500, "实例状态已提交，但定时停机状态保存失败: "+err.Error())
 		return
 	}
-	s.dispatchEvent(rctx(), notify.Event{Title: "实例控制指令已提交", Summary: fmt.Sprintf("%s 已提交%s指令", accountDisplay(*a), map[string]string{"start": "开机", "stop": "停机"}[action]), AccountID: accountDisplay(*a), Text: fmt.Sprintf("【ECS Controller】实例控制指令已提交\n实例: %s\n实例 ID: %s\n区域: %s\n动作: %s\n时间: %s", accountDisplay(*a), a.InstanceID, a.RegionID, action, time.Now().Format("2006-01-02 15:04:05")), Fields: map[string]string{"instance_id": a.InstanceID, "action": action, "region": a.RegionID}})
+	s.dispatchEvent(rctx(), notify.Event{Title: "实例控制指令已提交", Summary: fmt.Sprintf("%s 已提交%s指令", accountDisplay(*a), map[string]string{"start": "开机", "stop": "停机"}[action]), AccountID: accountDisplay(*a), Text: fmt.Sprintf("【ECS 控制台】实例控制指令已提交\n实例: %s\n实例 ID: %s\n区域: %s\n动作: %s\n时间: %s", accountDisplay(*a), a.InstanceID, a.RegionID, action, time.Now().Format("2006-01-02 15:04:05")), Fields: map[string]string{"instance_id": a.InstanceID, "action": action, "region": a.RegionID}})
 	s.json(w, 200, map[string]any{"success": true})
 }
 func (s *Server) deleteInstance(w http.ResponseWriter, data map[string]any) {
@@ -1325,7 +1325,7 @@ func (s *Server) deleteInstance(w http.ResponseWriter, data map[string]any) {
 		s.error(w, 500, "释放任务入队失败")
 		return
 	}
-	s.dispatchEvent(rctx(), notify.Event{Title: "实例释放已提交", Summary: "实例已进入后台释放队列。", AccountID: accountDisplay(*a), Text: fmt.Sprintf("【ECS Controller】实例释放已提交\n实例: %s\n实例 ID: %s\n区域: %s\n后台队列会继续处理 ECS、EIP 和 DDNS 清理。", accountDisplay(*a), a.InstanceID, a.RegionID), Fields: map[string]string{"instance_id": a.InstanceID, "region": a.RegionID, "action": "release"}})
+	s.dispatchEvent(rctx(), notify.Event{Title: "实例释放已提交", Summary: "实例已进入后台释放队列。", AccountID: accountDisplay(*a), Text: fmt.Sprintf("【ECS 控制台】实例释放已提交\n实例: %s\n实例 ID: %s\n区域: %s\n后台队列会继续处理 ECS、EIP 和 DDNS 清理。", accountDisplay(*a), a.InstanceID, a.RegionID), Fields: map[string]string{"instance_id": a.InstanceID, "region": a.RegionID, "action": "release"}})
 	s.json(w, 202, map[string]any{"success": true, "queued": true, "jobId": jobID})
 }
 func (s *Server) replaceIP(w http.ResponseWriter, data map[string]any) {
@@ -1372,7 +1372,7 @@ func (s *Server) replaceIP(w http.ResponseWriter, data map[string]any) {
 		s.error(w, 500, "新 EIP 已绑定，但本地状态保存失败: "+err.Error())
 		return
 	}
-	s.dispatchEvent(rctx(), notify.Event{Title: "公网 IP 已更换", Summary: fmt.Sprintf("%s 的公网 IP 已更换", accountDisplay(*a)), AccountID: accountDisplay(*a), Text: fmt.Sprintf("【ECS Controller】公网 IP 已更换\n实例: %s\n旧 IP: %s\n新 IP: %s\n区域: %s", accountDisplay(*a), oldIP, ip, a.RegionID), Fields: map[string]string{"old_ip": oldIP, "new_ip": ip, "instance_id": a.InstanceID}})
+	s.dispatchEvent(rctx(), notify.Event{Title: "公网 IP 已更换", Summary: fmt.Sprintf("%s 的公网 IP 已更换", accountDisplay(*a)), AccountID: accountDisplay(*a), Text: fmt.Sprintf("【ECS 控制台】公网 IP 已更换\n实例: %s\n旧 IP: %s\n新 IP: %s\n区域: %s", accountDisplay(*a), oldIP, ip, a.RegionID), Fields: map[string]string{"old_ip": oldIP, "new_ip": ip, "instance_id": a.InstanceID}})
 	s.json(w, 200, map[string]any{"success": true, "message": "公网 IP 已更换", "data": map[string]any{"publicIp": ip, "publicIpMode": "eip", "eipAllocationId": alloc, "eipAddress": ip, "internetMaxBandwidthOut": a.InternetBandwidth}})
 }
 
@@ -1781,7 +1781,7 @@ func (s *Server) testNotification(w http.ResponseWriter, action string, data map
 		if raw := stringValue(cfg["headers"]); raw != "" {
 			_ = json.Unmarshal([]byte(raw), &headers)
 		}
-		err = notify.Webhook(ctx, stringValue(cfg["url"]), stringValue(cfg["method"]), stringValue(cfg["request_type"]), headers, map[string]any{"event": "test", "message": "ECS Controller test notification"})
+		err = notify.Webhook(ctx, stringValue(cfg["url"]), stringValue(cfg["method"]), stringValue(cfg["request_type"]), headers, map[string]any{"event": "test", "message": "ECS 控制台测试通知"})
 	case "send_test_telegram":
 		cfg, _ := data["telegram"].(map[string]any)
 		token := stringValue(cfg["token"])
@@ -1799,7 +1799,7 @@ func (s *Server) testNotification(w http.ResponseWriter, action string, data map
 		if clientErr != nil {
 			err = clientErr
 		} else {
-			err = client.SendMessage(ctx, stringValue(cfg["chat_id"]), "ECS Controller 测试消息", nil)
+			err = client.SendMessage(ctx, stringValue(cfg["chat_id"]), "ECS 控制台测试消息", nil)
 		}
 	case "send_test_email":
 		settings := s.Store.Settings()
@@ -1808,7 +1808,7 @@ func (s *Server) testNotification(w http.ResponseWriter, action string, data map
 		if to == "" {
 			to = settings["notify_email"]
 		}
-		err = notify.Email(ctx, settings["notify_host"], numberString(settings["notify_port"], 465), settings["notify_username"], password, settings["notify_username"], to, "ECS Controller 测试消息", "通知通道测试成功。", settings["notify_secure"])
+		err = notify.Email(ctx, settings["notify_host"], numberString(settings["notify_port"], 465), settings["notify_username"], password, settings["notify_username"], to, "ECS 控制台测试消息", "通知通道测试成功。", settings["notify_secure"])
 	}
 	if err != nil {
 		s.json(w, 200, map[string]any{"success": false, "message": err.Error()})

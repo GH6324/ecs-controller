@@ -22,17 +22,23 @@ jobs:
         run: |
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LATEST_TAG" ]; then
-            NEXT_TAG="v1.6.0"
+            NEXT_TAG="v1.17.1"
           else
             # Extract major.minor.patch
             if [[ "$LATEST_TAG" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
               MAJOR="${BASH_REMATCH[1]}"
               MINOR="${BASH_REMATCH[2]}"
               PATCH="${BASH_REMATCH[3]}"
-              NEXT_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+              # Move the release line to v1.17.1 once, then keep patch bumps
+              # on the v1.17 line for subsequent pushes.
+              if (( MAJOR < 1 || (MAJOR == 1 && MINOR < 17) )); then
+                NEXT_TAG="v1.17.1"
+              else
+                NEXT_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+              fi
             else
               # Fallback if the previous tag format isn't standard
-              NEXT_TAG="v1.6.0"
+              NEXT_TAG="v1.17.1"
             fi
           fi
           echo "tag=$NEXT_TAG" >> $GITHUB_OUTPUT

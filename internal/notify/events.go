@@ -108,7 +108,7 @@ func (d Dispatcher) Dispatch(ctx context.Context, event Event) error {
 	if d.Config.EmailEnabled && d.Config.Email != "" && d.Config.SMTPHost != "" {
 		attempts++
 		body := event.Text
-		if err := Email(ctx, d.Config.SMTPHost, d.Config.SMTPPort, d.Config.SMTPUser, d.Config.SMTPPassword, d.Config.SMTPUser, d.Config.Email, "ECS Controller 通知 - "+event.Title, body, d.Config.SMTPSecure); err != nil {
+		if err := Email(ctx, d.Config.SMTPHost, d.Config.SMTPPort, d.Config.SMTPUser, d.Config.SMTPPassword, d.Config.SMTPUser, d.Config.Email, "ECS 控制台通知 - "+event.Title, body, d.Config.SMTPSecure); err != nil {
 			errs = append(errs, "邮件通知: "+err.Error())
 		} else {
 			succeeded++

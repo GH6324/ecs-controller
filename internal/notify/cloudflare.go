@@ -55,7 +55,7 @@ func (c *CloudflareClient) Update(ctx context.Context, name, address string, pro
 	if err != nil {
 		return err
 	}
-	payload := map[string]any{"type": "A", "name": strings.ToLower(strings.TrimSuffix(name, ".")), "content": address, "ttl": 1, "proxied": proxied, "comment": "Managed by ECS Controller"}
+	payload := map[string]any{"type": "A", "name": strings.ToLower(strings.TrimSuffix(name, ".")), "content": address, "ttl": 1, "proxied": proxied, "comment": "Managed by ECS 控制台"}
 	method, endpoint := http.MethodPost, c.endpoint(zoneID, "/dns_records")
 	if len(records) > 0 {
 		method = http.MethodPut

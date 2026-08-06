@@ -29,7 +29,7 @@ func (u *adminPasskeyUser) WebAuthnID() []byte { return []byte(passkeyUserHandle
 
 func (u *adminPasskeyUser) WebAuthnName() string { return "admin" }
 
-func (u *adminPasskeyUser) WebAuthnDisplayName() string { return "ECS Controller 管理员" }
+func (u *adminPasskeyUser) WebAuthnDisplayName() string { return "ECS 控制台管理员" }
 
 func (u *adminPasskeyUser) WebAuthnCredentials() []webauthn.Credential { return u.credentials }
 
@@ -65,7 +65,7 @@ func (s *Server) passkeyWebAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
 	origins := []string{requestOrigin(r, host)}
 
 	return webauthn.New(&webauthn.Config{
-		RPDisplayName: "ECS Controller",
+		RPDisplayName: "ECS 控制台",
 		RPID:          rpID,
 		RPOrigins:     origins,
 		AuthenticatorSelection: protocol.AuthenticatorSelection{

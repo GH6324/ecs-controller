@@ -114,7 +114,7 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 						metadata["protection_suspended"] = true
 						metadata["protection_suspend_reason"] = "credential_invalid"
 						if account.ProtectionNotifiedAt == 0 {
-							w.dispatchEvent(ctx, notify.Event{Title: "阿里云凭据异常", Summary: "已暂停自动停机保护", AccountID: accountLabel(account), Text: fmt.Sprintf("【ECS Controller】阿里云凭据异常\n账号/实例: %s\n实例 ID: %s\n区域: %s\n错误: %s\n系统已暂停自动停机保护，请更新 AK 后恢复。", accountLabel(account), account.InstanceID, account.RegionID, describeErr.Error()), Fields: map[string]string{"instance_id": account.InstanceID, "reason": "credential_invalid"}})
+							w.dispatchEvent(ctx, notify.Event{Title: "阿里云凭据异常", Summary: "已暂停自动停机保护", AccountID: accountLabel(account), Text: fmt.Sprintf("【ECS 控制台】阿里云凭据异常\n账号/实例: %s\n实例 ID: %s\n区域: %s\n错误: %s\n系统已暂停自动停机保护，请更新 AK 后恢复。", accountLabel(account), account.InstanceID, account.RegionID, describeErr.Error()), Fields: map[string]string{"instance_id": account.InstanceID, "reason": "credential_invalid"}})
 							account.ProtectionNotifiedAt = now.Unix()
 							metadata["protection_suspend_notified_at"] = account.ProtectionNotifiedAt
 						}
@@ -145,7 +145,7 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 						account.ProtectionSuspended, account.ProtectionSuspendReason = false, ""
 					}
 					if reason == "credential_invalid" && account.ProtectionNotifiedAt == 0 {
-						w.dispatchEvent(ctx, notify.Event{Title: "阿里云凭据异常", Summary: "已暂停自动停机保护", AccountID: accountLabel(account), Text: fmt.Sprintf("【ECS Controller】阿里云凭据异常\n账号/实例: %s\n实例 ID: %s\n错误: %s\n系统已暂停自动停机保护，请更新 AK 后恢复。", accountLabel(account), account.InstanceID, trafficErr.Error()), Fields: map[string]string{"instance_id": account.InstanceID, "reason": "credential_invalid"}})
+						w.dispatchEvent(ctx, notify.Event{Title: "阿里云凭据异常", Summary: "已暂停自动停机保护", AccountID: accountLabel(account), Text: fmt.Sprintf("【ECS 控制台】阿里云凭据异常\n账号/实例: %s\n实例 ID: %s\n错误: %s\n系统已暂停自动停机保护，请更新 AK 后恢复。", accountLabel(account), account.InstanceID, trafficErr.Error()), Fields: map[string]string{"instance_id": account.InstanceID, "reason": "credential_invalid"}})
 						account.ProtectionNotifiedAt = now.Unix()
 					}
 					if err := w.Store.UpsertAccount(account); err != nil {
@@ -193,7 +193,7 @@ func (w *Worker) Monitor(ctx context.Context, interval time.Duration) {
 				}
 				if account.PublicIP != "" && account.PublicIP != oldPublicIP {
 					w.syncDDNSAccount(ctx, account)
-					w.dispatchEvent(ctx, notify.Event{Title: "公网 IP 已变化", Summary: fmt.Sprintf("%s 公网 IP 已从 %s 变为 %s", accountLabel(account), oldPublicIP, account.PublicIP), AccountID: accountLabel(account), Text: fmt.Sprintf("【ECS Controller】公网 IP 已变化\n实例: %s\n实例 ID: %s\n旧 IP: %s\n新 IP: %s\n时间: %s", accountLabel(account), account.InstanceID, oldPublicIP, account.PublicIP, time.Now().Format("2006-01-02 15:04:05")), Fields: map[string]string{"old_ip": oldPublicIP, "new_ip": account.PublicIP, "instance_id": account.InstanceID}})
+					w.dispatchEvent(ctx, notify.Event{Title: "公网 IP 已变化", Summary: fmt.Sprintf("%s 公网 IP 已从 %s 变为 %s", accountLabel(account), oldPublicIP, account.PublicIP), AccountID: accountLabel(account), Text: fmt.Sprintf("【ECS 控制台】公网 IP 已变化\n实例: %s\n实例 ID: %s\n旧 IP: %s\n新 IP: %s\n时间: %s", accountLabel(account), account.InstanceID, oldPublicIP, account.PublicIP, time.Now().Format("2006-01-02 15:04:05")), Fields: map[string]string{"old_ip": oldPublicIP, "new_ip": account.PublicIP, "instance_id": account.InstanceID}})
 				}
 			}
 			w.runDailyTrafficSummary(ctx, now)
@@ -651,7 +651,7 @@ func (w *Worker) deleteInstance(ctx context.Context, job *store.Job) error {
 		before = []app.Account{*account}
 	}
 	w.syncAllDDNS(ctx)
-	w.dispatchEvent(ctx, notify.Event{Title: "实例已释放", Summary: "实例已从云端释放，本地记录和 DDNS 已清理。", AccountID: accountLabel(*account), Text: fmt.Sprintf("【ECS Controller】实例已释放\n实例: %s\n实例 ID: %s\n区域: %s\n公网 IP: %s\n时间: %s", accountLabel(*account), account.InstanceID, account.RegionID, account.PublicIP, time.Now().Format("2006-01-02 15:04:05")), Fields: map[string]string{"instance_id": account.InstanceID, "region": account.RegionID, "public_ip": account.PublicIP}})
+	w.dispatchEvent(ctx, notify.Event{Title: "实例已释放", Summary: "实例已从云端释放，本地记录和 DDNS 已清理。", AccountID: accountLabel(*account), Text: fmt.Sprintf("【ECS 控制台】实例已释放\n实例: %s\n实例 ID: %s\n区域: %s\n公网 IP: %s\n时间: %s", accountLabel(*account), account.InstanceID, account.RegionID, account.PublicIP, time.Now().Format("2006-01-02 15:04:05")), Fields: map[string]string{"instance_id": account.InstanceID, "region": account.RegionID, "public_ip": account.PublicIP}})
 	w.Store.AddLog("info", "实例已异步释放: "+account.InstanceID)
 	return nil
 }
@@ -785,7 +785,7 @@ func (w *Worker) createECS(ctx context.Context, job *store.Job) (err error) {
 	}
 	w.syncDDNSAccount(ctx, a)
 	_ = w.Store.UpdateTask(task.TaskID, map[string]any{"status": "success", "step": "创建完成", "public_ip": publicIP, "login_user": stringOr(payload, "loginUser", "root"), "login_password": password, "error_message": ""})
-	w.dispatchEvent(ctx, notify.Event{Title: "ECS 创建成功", Summary: "实例已创建并启动，请保存一次性登录密码。", AccountID: group.Remark, Text: fmt.Sprintf("【ECS Controller】ECS 创建成功\n账号: %s\n实例 ID: %s\n区域: %s\n规格: %s\n公网 IP: %s\n登录用户: %s\n初始密码: %s\n请立即保存并修改初始密码。", group.Remark, createdInstance, task.RegionID, task.InstanceType, publicIP, stringOr(payload, "loginUser", "root"), password), Fields: map[string]string{"instance_id": createdInstance, "region": task.RegionID, "public_ip": publicIP, "password": password}})
+	w.dispatchEvent(ctx, notify.Event{Title: "ECS 创建成功", Summary: "实例已创建并启动，请保存一次性登录密码。", AccountID: group.Remark, Text: fmt.Sprintf("【ECS 控制台】ECS 创建成功\n账号: %s\n实例 ID: %s\n区域: %s\n规格: %s\n公网 IP: %s\n登录用户: %s\n初始密码: %s\n请立即保存并修改初始密码。", group.Remark, createdInstance, task.RegionID, task.InstanceType, publicIP, stringOr(payload, "loginUser", "root"), password), Fields: map[string]string{"instance_id": createdInstance, "region": task.RegionID, "public_ip": publicIP, "password": password}})
 	return nil
 }
 

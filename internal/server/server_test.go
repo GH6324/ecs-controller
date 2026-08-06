@@ -1159,7 +1159,7 @@ func TestUpdateStatusCompletesWhenControllerAlreadyRunsTargetCommit(t *testing.T
 
 	updateDir := t.TempDir()
 	target := strings.Repeat("a", 40)
-	status := fmt.Sprintf(`{"status":"running","phase":"restarting","message":"正在重启 ECS Controller","progress":94,"target_commit":"%s","current_commit":"%s","request_id":"request-1","updated_at":%d}`, target, target, time.Now().Unix())
+	status := fmt.Sprintf(`{"status":"running","phase":"restarting","message":"正在重启 ECS 控制台","progress":94,"target_commit":"%s","current_commit":"%s","request_id":"request-1","updated_at":%d}`, target, target, time.Now().Unix())
 	if err := os.WriteFile(filepath.Join(updateDir, "status.json"), []byte(status), 0600); err != nil {
 		t.Fatal(err)
 	}

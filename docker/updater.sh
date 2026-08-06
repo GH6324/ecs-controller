@@ -141,7 +141,7 @@ run_update() {
         write_status error failed "本地代码无法快进到目标版本" 0 "$target" "$current"
         return
     fi
-    write_status running restarting "正在重启 ECS Controller" 78 "$target" "$target"
+    write_status running restarting "正在重启 ECS 控制台" 78 "$target" "$target"
     if ! docker compose --project-name "$compose_project" -f "$project_dir/docker-compose.yml" up -d --no-build --force-recreate ecs-controller || ! wait_for_controller "$target" "$target"; then
         git -C "$project_dir" reset --hard "$current" >/dev/null 2>&1 || true
         export ECS_COMMIT="$current"
